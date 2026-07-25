@@ -46,6 +46,28 @@ Output is emitted to the `dist/` directory.
 npm run preview
 ```
 
+### Stopping the dev servers
+
+`npm start` runs the viewer and the ws server under `concurrently`. To stop them — and any stale
+listener left over from an earlier session — use:
+
+```bash
+npm run dev:list    # show what holds the ports, kill nothing
+npm run dev:stop    # force-stop them (tree kill, so concurrently goes too)
+```
+
+Ports come from `config.yaml`, never hardcoded. Extra ports can be added as positional arguments,
+which is useful for an ad-hoc server: `npm run dev:stop -- 7801`.
+
+> **npm eats flags.** This npm forwards only *positional* arguments after `--`; every `--flag` is
+> stripped, verified by probe. `npm run dev:stop -- --list` would therefore kill everything while
+> looking like a dry run — which is exactly why `dev:list` is its own script with the flag baked in.
+> Flags behave normally when node runs the script directly:
+> `node scripts/dev-stop.mjs --list --json 7801`.
+
+A held lock is not hypothetical: a running Vite dev server keeps a handle on `apps/web/src`, and
+`git mv` on it fails with `Permission denied` until the server is stopped.
+
 ## Project Structure
 
 An npm-workspaces monorepo. The two servers are siblings — neither is nested inside the other.

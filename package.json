@@ -15,6 +15,8 @@
     "dev": "vite",
     "preserve": "npm run gen:config",
     "serve": "node apps/server/index.js",
+    "dev:stop": "node scripts/dev-stop.mjs",
+    "dev:list": "node scripts/dev-stop.mjs --list",
     "prestart": "npm run gen:config",
     "start": "concurrently -k -n server,web -c green,cyan \"node apps/server/index.js\" \"vite\"",
     "prebuild": "npm run gen:config",
