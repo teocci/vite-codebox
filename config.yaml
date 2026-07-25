@@ -1,0 +1,39 @@
+# codeblox configuration — the human-editable source of truth.
+#
+# Compiled to shared/config.values.js by scripts/gen-config.mjs (runs on
+# install / dev / build / test). Nothing reads environment variables or a .env
+# file — this YAML is the only place to change these values.
+
+# Metres per block: the resolution quantum. 0.02 = 2 cm, fine enough for birds and
+# small creatures. Lower it (e.g. 0.01) for insect-level detail, raise it for
+# coarser/larger scenes. Because parts are scaled (a box of N blocks is one
+# object), big builds stay cheap regardless of this value.
+blockSize: 0.02
+
+world:
+  # World half-extent, in METRES (not blocks). Sets the floor size and the build
+  # bounds, independent of blockSize. 32 -> a 64 x 64 m world.
+  extent: 32
+  # Floor grid line spacing, in METRES. A human-readable reference (1 m cells),
+  # separate from the finer block quantum.
+  gridStep: 1
+
+# --- the two servers `npm start` runs ---------------------------------------
+
+# web: the viewer. Vite's dev/preview server that serves the browser app.
+web:
+  host: localhost
+  port: 5173
+
+# ws: the authoritative command server. The agent/viewer send build commands
+# here; it validates them and broadcasts the world to every viewer.
+ws:
+  host: 127.0.0.1
+  # 7799 avoids Windows' reserved/excluded port ranges (8702-8801 etc.).
+  port: 7799
+  # Seed an example tree on boot so a freshly connected viewer isn't empty.
+  seed: true
+  auth:
+    # true -> clients must present a valid token to connect (token in .codeblox/token).
+    # false (local dev) -> open on localhost.
+    required: false

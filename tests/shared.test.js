@@ -1,0 +1,111 @@
+import { describe, it, expect } from 'vitest'
+import { BLOCK_SIZE, metres, blockLabel, WORLD } from '../shared/config.js'
+import {
+  MATERIALS, MATERIAL_NAMES, MATERIAL_FAMILIES, isMaterial, materialColor, materialFamily,
+} from '../shared/materials.js'
+import { FAMILY, isFamily } from '../shared/families.js'
+import { validate, expand, contract, isPartOp } from '../shared/protocol.js'
+
+describe('config', () => {
+  it('uses a 2 cm block by default', () => {
+    expect(BLOCK_SIZE).toBe(0.02)
+    expect(metres(50)).toBeCloseTo(1)
+  })
+  it('formats the block label in cm below 1 m (float-safe)', () => {
+    expect(blockLabel()).toBe('2 cm')
+  })
+  it('derives block bounds from the metre extent', () => {
+    expect(WORLD.boundBlocks).toBe(Math.round(WORLD.extent / BLOCK_SIZE))
+    expect(WORLD.heightBlocks).toBe(Math.round((WORLD.extent * 2) / BLOCK_SIZE))
+  })
+})
+
+describe('materials', () => {
+  it('has exactly 100 named materials', () => {
+    expect(MATERIAL_NAMES.length).toBe(100)
+  })
+  it('every family list references a real material and a valid family', () => {
+    for (const [family, names] of Object.entries(MATERIAL_FAMILIES)) {
+      expect(isFamily(family)).toBe(true)
+      for (const name of names) {
+        expect(isMaterial(name)).toBe(true)
+        expect(materialFamily(name)).toBe(family)
+      }
+    }
+  })
+  it('defaults unlisted materials to opaque', () => {
+    expect(materialFamily('granite')).toBe(FAMILY.OPAQUE)
+    expect(materialFamily('glass')).toBe(FAMILY.GLASS)
+    expect(materialFamily('gold')).toBe(FAMILY.METAL)
+    expect(materialFamily('flame')).toBe(FAMILY.EMISSIVE)
+  })
+  it('rejects unknown names', () => {
+    expect(isMaterial('pink3')).toBe(false)
+    expect(materialColor('pink3')).toBe(null)
+    expect(materialColor('oak')).toBe(0xc9a377)
+  })
+})
+
+describe('protocol.validate', () => {
+  it('accepts a well-formed box', () => {
+    expect(validate({ op: 'box', at: [0, 0, 0], size: [10, 20, 10], mat: 'oak' }).ok).toBe(true)
+  })
+  it('rejects unknown material', () => {
+    const r = validate({ op: 'box', at: [0, 0, 0], size: [1, 1, 1], mat: 'nope' })
+    expect(r.ok).toBe(false)
+    expect(r.errors.join()).toMatch(/material/)
+  })
+  it('rejects non-integer / non-positive size', () => {
+    expect(validate({ op: 'box', at: [0, 0, 0], size: [1.5, 1, 1], mat: 'oak' }).ok).toBe(false)
+    expect(validate({ op: 'box', at: [0, 0, 0], size: [0, 1, 1], mat: 'oak' }).ok).toBe(false)
+  })
+  it('rejects out-of-bounds parts', () => {
+    const below = validate({ op: 'box', at: [0, -5, 0], size: [1, 1, 1], mat: 'oak' })
+    expect(below.ok).toBe(false)
+    const wide = validate({ op: 'box', at: [0, 0, 0], size: [4000, 1, 1], mat: 'oak' })
+    expect(wide.ok).toBe(false)
+  })
+  it('validates sphere and cylinder', () => {
+    expect(validate({ op: 'sphere', at: [0, 5, 0], r: 5, mat: 'glass' }).ok).toBe(true)
+    expect(validate({ op: 'cylinder', at: [0, 5, 0], r: 2, h: 10, mat: 'iron' }).ok).toBe(true)
+    expect(validate({ op: 'sphere', at: [0, 5, 0], r: 0, mat: 'glass' }).ok).toBe(false)
+  })
+  it('validates control ops', () => {
+    expect(validate({ op: 'clear' }).ok).toBe(true)
+    expect(validate({ op: 'world_info' }).ok).toBe(true)
+    expect(validate({ op: 'remove', id: 3 }).ok).toBe(true)
+    expect(validate({ op: 'remove', id: -1 }).ok).toBe(false)
+    expect(validate({ op: 'frobnicate' }).ok).toBe(false)
+  })
+})
+
+describe('protocol.expand', () => {
+  it('normalizes a box to center + size', () => {
+    const [p] = expand({ op: 'box', at: [0, 0, 0], size: [10, 20, 10], mat: 'oak' })
+    expect(p).toEqual({ kind: 'box', center: [5, 10, 5], size: [10, 20, 10], material: 'oak' })
+  })
+  it('normalizes a sphere (at = center)', () => {
+    const [p] = expand({ op: 'sphere', at: [5, 25, 5], r: 5, mat: 'glass' })
+    expect(p).toEqual({ kind: 'sphere', center: [5, 25, 5], size: [10, 10, 10], material: 'glass' })
+  })
+  it('normalizes an inclusive fill region to one box', () => {
+    const [p] = expand({ op: 'fill', from: [0, 0, 0], to: [2, 0, 2], mat: 'cobble' })
+    expect(p.kind).toBe('box')
+    expect(p.size).toEqual([3, 1, 3])
+    expect(p.center).toEqual([1.5, 0.5, 1.5])
+  })
+  it('returns [] for control ops', () => {
+    expect(expand({ op: 'clear' })).toEqual([])
+    expect(isPartOp('clear')).toBe(false)
+  })
+})
+
+describe('protocol.contract', () => {
+  it('publishes config, palette and op schema', () => {
+    const c = contract()
+    expect(c.config.blockSize).toBe(0.02)
+    expect(c.config.blockLabel).toBe('2 cm')
+    expect(c.palette.oak).toEqual({ color: 0xc9a377, family: 'opaque' })
+    expect(c.ops.find(o => o.op === 'box')).toBeTruthy()
+  })
+})
