@@ -25,6 +25,9 @@ const (
 	// AuthFileName is the credential store's file backend. It may contain a
 	// secret, so it is created 0600 and is never this package's concern.
 	AuthFileName = "auth.json"
+	// ContractFileName caches the server's published world_info, so `materials`
+	// and batch validation work without a round trip.
+	ContractFileName = "world_info.json"
 
 	EnvConfig   = "CODEBLOX_CONFIG"
 	EnvEndpoint = "CODEBLOX_ENDPOINT"
@@ -73,6 +76,11 @@ func (e Env) BaseDir() string {
 // AuthPath is where the credential store's file backend lives.
 func (e Env) AuthPath() string {
 	return filepath.Join(e.BaseDir(), AuthFileName)
+}
+
+// ContractPath is where the fetched world_info contract is cached.
+func (e Env) ContractPath() string {
+	return filepath.Join(e.BaseDir(), ContractFileName)
 }
 
 // ConfigPath resolves the settings file by the documented precedence:

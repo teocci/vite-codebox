@@ -16,12 +16,28 @@ const Version = "0.3.0"
 
 const usage = `codeblox — command a codeblox build server
 
-usage:
+auth:
   codeblox auth login  [--with-token] [--endpoint URL] [--backend keyring|file] [--config PATH]
   codeblox auth logout [--backend keyring|file]
   codeblox auth list   [--backend keyring|file] [--json]
   codeblox auth status [--endpoint URL] [--backend keyring|file] [--insecure] [--json]
+
+discovery:
+  codeblox info        [--json]              fetch and cache the world_info contract
+  codeblox materials   [--family F] [--json] [--refresh]
+
+building:
+  codeblox exec        [--dry-run] [--json]  read a batch from stdin (JSON array, object, or NDJSON)
+  codeblox box         --at x,y,z --size w,h,d --mat NAME
+  codeblox sphere      --at x,y,z --r N --mat NAME
+  codeblox cylinder    --at x,y,z --r N --h N --mat NAME
+  codeblox remove      --id N
+  codeblox clear
+
   codeblox version
+
+Batches are validated against the server's published schema and palette before
+anything is sent. World bounds are enforced by the server and reported in its ack.
 
 credentials:
   The token is kept in the OS keyring by default, or a 0600 file store when no
@@ -43,7 +59,7 @@ type Deps struct {
 	Stderr io.Writer
 
 	// Dial and OpenStore default to the real implementations when nil.
-	Dial      func(context.Context, transport.Dialer) (*transport.Conn, error)
+	Dial      func(context.Context, transport.Dialer) (Session, error)
 	OpenStore func(config.Env, string) (creds.Backend, error)
 }
 
@@ -57,6 +73,8 @@ func Dispatch(ctx context.Context, d Deps, args []string) error {
 	switch args[0] {
 	case "auth":
 		return dispatchAuth(ctx, d, args[1:])
+	case "info", "materials", "exec", "box", "sphere", "cylinder", "remove", "clear":
+		return dispatchBuild(ctx, d, args[0], args[1:])
 	case "version":
 		fmt.Fprintf(d.Stdout, "codeblox %s\n", Version)
 		return nil

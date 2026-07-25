@@ -179,7 +179,7 @@ func TestStatusReportsAReachableServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	a.Dial = func(context.Context, transport.Dialer) (*transport.Conn, error) {
+	a.Dial = func(context.Context, transport.Dialer) (Session, error) {
 		return &transport.Conn{Welcome: transport.Welcome{
 			Type:     "welcome",
 			Contract: json.RawMessage(`{"ops":["box"]}`),
@@ -199,7 +199,7 @@ func TestStatusSurfacesARejectedToken(t *testing.T) {
 	if err := a.Login(LoginOptions{FromStdin: true}); err != nil {
 		t.Fatal(err)
 	}
-	a.Dial = func(context.Context, transport.Dialer) (*transport.Conn, error) {
+	a.Dial = func(context.Context, transport.Dialer) (Session, error) {
 		return nil, errors.New("unauthorized — the server rejected this token")
 	}
 
@@ -218,7 +218,7 @@ func TestStatusAsJSONNeverCarriesTheRawToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	a.Dial = func(context.Context, transport.Dialer) (*transport.Conn, error) {
+	a.Dial = func(context.Context, transport.Dialer) (Session, error) {
 		return &transport.Conn{Welcome: transport.Welcome{Type: "welcome"}}, nil
 	}
 

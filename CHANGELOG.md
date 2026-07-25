@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-25
+
+Schema-driven build verbs: info, exec, and the ergonomic forms
+
+### Added
+
+- P-4: `codeblox info` — fetches the server's `world_info` contract, prints the world configuration,
+  material count, and every published op with its field types, and caches it at
+  `~/.codeblox/world_info.json`.
+- P-4: `codeblox materials [--family F]` — lists the palette from the cache without contacting the
+  server; `--refresh` forces a re-fetch.
+- P-4: `codeblox exec` — reads a command batch from stdin as a JSON array, a single JSON object, or
+  NDJSON. `--dry-run` validates and stops.
+- P-4: Ergonomic single-command forms — `box`, `sphere`, `cylinder`, `remove`, and `clear` — routed
+  through the same validated path as `exec`.
+- P-4: Client-side batch validation against the *fetched* schema and palette. An unknown op, a bad
+  material, a wrong-arity vector, or a non-positive size is rejected before anything is sent.
+- P-4: `--json` on every build verb, reporting `ok`, `sent`, `addedIds`, `removed`, and `cleared`.
+
+### Changed
+
+- P-4: The CLI compiles in no op list and no palette; both arrive from the server, so a new material
+  or op needs no client release.
+
 ## [0.3.0] - 2026-07-25
 
 codeblox Go CLI: credentials, config, and authenticated transport
@@ -55,5 +79,7 @@ recorded here as one baseline.
   untouched, with a local-apply fallback when the server is unreachable.
 - P-2: `npm start` — runs the viewer (:5173) and the server (:7799) together.
 
-[Unreleased]: https://github.com/teocci/vite-codebox/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/teocci/vite-codebox/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/teocci/vite-codebox/releases/tag/v0.4.0
+[0.3.0]: https://github.com/teocci/vite-codebox/releases/tag/v0.3.0
 [0.2.0]: https://github.com/teocci/vite-codebox/releases/tag/v0.2.0

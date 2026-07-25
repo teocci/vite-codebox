@@ -55,6 +55,10 @@ type Conn struct {
 	ws *websocket.Conn
 }
 
+// Contract returns the server's published world_info, still raw so the CLI stays
+// schema-driven.
+func (c *Conn) Contract() json.RawMessage { return c.Welcome.Contract }
+
 // Close tears the connection down.
 func (c *Conn) Close() error {
 	if c.ws == nil {

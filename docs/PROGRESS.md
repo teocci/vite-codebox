@@ -1,8 +1,8 @@
 # Progress
 
-**Current version:** 0.3.0
-**Active phase:** none — v0.3.0 released (P-3, the `codeblox` Go CLI foundation; 97 tests: 44
-vitest + 53 Go). P-4 is unblocked and ready to start.
+**Current version:** 0.4.0
+**Active phase:** none — v0.4.0 released (P-4, the schema-driven build verbs; 136 tests: 44 vitest
++ 92 Go). P-5, the last phase of the plan, is unblocked and ready to start.
 
 Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active plan: `docs/PLAN.md`.
 
@@ -11,19 +11,37 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 1 | Engine + viewer, driven locally | done |
 | 2 | Authoritative WS server + transport security | done |
 | 3 | codeblox CLI foundation — config, credentials, transport | done |
-| 4 | Schema-driven build verbs — info, exec, and the ergonomic forms | planned |
+| 4 | Schema-driven build verbs — info, exec, and the ergonomic forms | done |
 | 5 | codeblox-builder agent skill | planned |
 
 ## Next action
 
-Implement **P-4** — the schema-driven build verbs on the CLI: `info` (fetch and cache `world_info`),
-client-side validation against the fetched palette, `exec -` reading a batch from stdin, `materials`,
-the ergonomic `box`/`sphere`/`cylinder` forms, `remove`, and `clear`. Ready now; P-5 waits on it.
+Implement **P-5** — `skills/codeblox-builder/SKILL.md`, the agent skill: discovery through
+`codeblox info` rather than hard-coded tables, the op vocabulary, batching, the coordinate
+convention, worked examples (box-plus-sphere and a bridge), and guardrails (stay in bounds, use only
+material names `world_info` returns, prefer few large parts). Ready now; it closes the plan.
 
 Open follow-up from Phase 2, not yet scheduled: the server still runs plain `ws`. WSS/TLS —
 native or behind a reverse proxy — is required before the CLI connects to a VPS over the network.
 P-3 already refuses to send the token over plain `ws://` to a remote host, so that gap now blocks
 remote use loudly rather than silently.
+
+> Phase 4 (done): Made the CLI schema-driven and gave it the build verbs. `internal/contract` models
+> the published `world_info` — config, palette, and each op's field-type map — so the binary compiles
+> in no op list and no material names; both arrive from the server and cache at
+> `~/.codeblox/world_info.json`. `ValidateCommand` walks the *published* field spec (`int3`,
+> `int3+`, `int+`, `id`, `material`) and defers unrecognised types to the server, so a future op
+> needs no client release. `transport.SendBatch` submits a `commands` frame and reads *past* the
+> broadcast `diff` to the sender's `ack` — the server broadcasts before acking, so taking the first
+> frame would misreport every build. A `Session` interface now sits between the verbs and the socket,
+> making every verb testable without a network. `ParseBatch` accepts a JSON array, a single object,
+> or NDJSON; `RunBatch` validates the whole batch before sending anything, and `--dry-run` stops
+> after validation. `materials` serves from the cache without dialling. Ergonomic
+> `box`/`sphere`/`cylinder`/`remove`/`clear` route through the same validated path. Verified live: a
+> five-command NDJSON bridge built (`addedIds:[1,2,3,4]`), a bad material was refused before any
+> send, and an out-of-bounds box was refused by the server with a non-zero exit. Bounds are
+> deliberately server-side only — the published schema describes types, not the box-corner /
+> sphere-centre geometry, so checking them client-side would duplicate `shared/protocol.js`.
 
 > Phase 3 (done): Built `clients/codeblox/`, the operator-PC Go binary. `internal/config` injects
 > the host environment (home, cwd, getenv) so every path is testable and nothing resolves relative

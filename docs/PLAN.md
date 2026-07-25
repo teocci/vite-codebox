@@ -5,5 +5,5 @@
 | Phase | Items | Depends | Release | Version | Status |
 |-------|-------|---------|---------|---------|--------|
 | P-3 | — | — | R1 | 0.3.0 | released |
-| P-4 | — | P-3 | R2 | (pending) | pending |
+| P-4 | — | P-3 | R2 | 0.4.0 | released |
 | P-5 | — | P-4 | R3 | (pending) | pending |

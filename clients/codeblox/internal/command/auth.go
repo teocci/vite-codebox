@@ -21,6 +21,17 @@ import (
 	"github.com/teocci/vite-codebox/clients/codeblox/internal/transport"
 )
 
+// Session is a live, authenticated connection to a codeblox server. It exists so
+// the verbs can be tested against a fake without a socket; *transport.Conn is the
+// production implementation.
+type Session interface {
+	// Contract is the server's published world_info, raw.
+	Contract() json.RawMessage
+	// SendBatch submits a command batch and returns the server's ack.
+	SendBatch(context.Context, []any) (transport.Ack, error)
+	Close() error
+}
+
 // App is the CLI's injected context.
 type App struct {
 	Env    config.Env
@@ -31,7 +42,7 @@ type App struct {
 
 	// Dial opens a connection. Injected so tests need no server; nil means use
 	// the real dialer.
-	Dial func(context.Context, transport.Dialer) (*transport.Conn, error)
+	Dial func(context.Context, transport.Dialer) (Session, error)
 	// PromptSecret reads a secret without echoing. nil means use the terminal.
 	PromptSecret func(prompt string) (string, error)
 }
@@ -186,7 +197,7 @@ func (a *App) Status(ctx context.Context, opts StatusOptions) error {
 		Backend:   a.Store.Name(),
 		Source:    source,
 		Token:     creds.Mask(token),
-		Contract:  len(conn.Welcome.Contract) > 0,
+		Contract:  len(conn.Contract()) > 0,
 	}
 	if opts.JSON {
 		return a.emitJSON(report)
@@ -251,7 +262,7 @@ func (a *App) saveEndpoint(opts LoginOptions) error {
 	return cfg.Save(a.Env.ConfigPath(opts.ConfigPath))
 }
 
-func (a *App) dial(ctx context.Context, d transport.Dialer) (*transport.Conn, error) {
+func (a *App) dial(ctx context.Context, d transport.Dialer) (Session, error) {
 	if a.Dial != nil {
 		return a.Dial(ctx, d)
 	}
