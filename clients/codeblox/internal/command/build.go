@@ -58,6 +58,15 @@ type execReport struct {
 	Errors   []string `json:"errors,omitempty"`
 }
 
+// dryRunReport is the machine-readable result of --dry-run. It is a distinct
+// shape from execReport because "nothing was sent" and "sent, and 0 landed" are
+// different outcomes a caller must not confuse.
+type dryRunReport struct {
+	OK        bool `json:"ok"`
+	Validated int  `json:"validated"`
+	Sent      int  `json:"sent"`
+}
+
 // ParseBatch reads a command batch: a JSON array, a single JSON object, or NDJSON
 // (one object per line). Blank lines are skipped so a heredoc stays readable.
 func ParseBatch(r io.Reader) ([]map[string]any, error) {
@@ -126,7 +135,8 @@ func ParseInt3(value string) ([]any, error) {
 func (a *App) Exec(ctx context.Context, opts ExecOptions) error {
 	batch, err := ParseBatch(a.Stdin)
 	if err != nil {
-		return err
+		// Malformed or empty stdin is the caller's input, not a server problem.
+		return fail(ExitUsage, "usage", err)
 	}
 	return a.RunBatch(ctx, batch, opts)
 }
@@ -155,6 +165,9 @@ func (a *App) RunBatch(ctx context.Context, batch []map[string]any, opts ExecOpt
 		return batchRejection(bad)
 	}
 	if opts.DryRun {
+		if opts.JSON {
+			return a.emitJSON(dryRunReport{OK: true, Validated: len(batch)})
+		}
 		fmt.Fprintf(a.Stdout, "%d command(s) valid against the server contract; nothing sent\n",
 			len(batch))
 		return nil
@@ -190,7 +203,8 @@ func (a *App) reportAck(ack transport.Ack, sent int, asJSON bool) error {
 		}
 	}
 	if len(reasons) > 0 {
-		return fmt.Errorf("server rejected %d command(s): %s", len(reasons), strings.Join(reasons, " | "))
+		return fail(ExitServer, "server_rejected",
+			fmt.Errorf("server rejected %d command(s): %s", len(reasons), strings.Join(reasons, " | ")))
 	}
 	return nil
 }
@@ -231,8 +245,9 @@ func (a *App) Materials(ctx context.Context, opts MaterialsOptions) error {
 	if opts.Family != "" {
 		names = spec.MaterialNamesByFamily(opts.Family)
 		if len(names) == 0 {
-			return fmt.Errorf("no materials in family %q: server publishes %v",
-				opts.Family, spec.Families())
+			return fail(ExitContract, "unknown_family",
+				fmt.Errorf("no materials in family %q: server publishes %v",
+					opts.Family, spec.Families()))
 		}
 	}
 
@@ -275,30 +290,65 @@ type dialOptions struct {
 	Insecure   bool
 }
 
-// session authenticates, connects, and returns the live session plus the freshly
-// published contract, which it also caches.
-func (a *App) session(ctx context.Context, opts dialOptions) (Session, contract.Contract, error) {
+// connection is a dialed session plus how it was reached. `auth status` reports
+// these facts; the build verbs only need the session.
+type connection struct {
+	session  Session
+	endpoint string
+	token    string
+	source   string
+}
+
+// connect resolves the endpoint and credential, refuses an unsafe transport,
+// and dials — classifying every failure on the way.
+//
+// Both the build verbs and `auth status` go through here. They used to repeat
+// these four steps, which is how `auth status` ended up returning an
+// unclassified exit 1 for failures the build path already reported as auth or
+// network.
+func (a *App) connect(ctx context.Context, opts dialOptions) (connection, error) {
 	endpoint, err := a.Env.Endpoint(opts.Endpoint, opts.ConfigPath)
 	if err != nil {
-		return nil, contract.Contract{}, err
+		// A malformed endpoint came from a flag, an env var, or the settings
+		// file — the caller supplied it either way.
+		return connection{}, fail(ExitUsage, "usage", err)
 	}
-	token, _, err := creds.Resolve(a.Store, a.Env)
+
+	token, source, err := creds.Resolve(a.Store, a.Env)
 	if errors.Is(err, creds.ErrNoCredential) {
-		return nil, contract.Contract{}, errors.New("not authenticated — run `codeblox auth login`")
+		return connection{}, fail(ExitAuth, "not_authenticated",
+			errors.New("not authenticated — run `codeblox auth login`"))
 	}
 	if err != nil {
-		return nil, contract.Contract{}, err
+		return connection{}, fail(ExitAuth, "credential_unreadable", err)
 	}
+
+	// The guard runs before the dial so a rejected endpoint never puts the
+	// token on the wire.
 	if err := transport.CheckTransportSecurity(endpoint, opts.Insecure); err != nil {
-		return nil, contract.Contract{}, err
+		return connection{}, fail(ExitNetwork, "insecure_transport", err)
 	}
 
 	session, err := a.dial(ctx, transport.Dialer{
 		Endpoint: endpoint, Token: token, Insecure: opts.Insecure,
 	})
 	if err != nil {
+		if errors.Is(err, transport.ErrUnauthorized) {
+			return connection{}, fail(ExitAuth, "unauthorized", err)
+		}
+		return connection{}, fail(ExitNetwork, "unreachable", err)
+	}
+	return connection{session: session, endpoint: endpoint, token: token, source: source}, nil
+}
+
+// session authenticates, connects, and returns the live session plus the freshly
+// published contract, which it also caches.
+func (a *App) session(ctx context.Context, opts dialOptions) (Session, contract.Contract, error) {
+	conn, err := a.connect(ctx, opts)
+	if err != nil {
 		return nil, contract.Contract{}, err
 	}
+	session := conn.session
 
 	var spec contract.Contract
 	if err := json.Unmarshal(session.Contract(), &spec); err != nil {
@@ -316,8 +366,9 @@ func batchRejection(bad []contract.BadCommand) error {
 	for _, b := range bad {
 		lines = append(lines, fmt.Sprintf("command %d: %s", b.Index, strings.Join(b.Errors, "; ")))
 	}
-	return fmt.Errorf("%d command(s) rejected before sending:\n  %s",
-		len(bad), strings.Join(lines, "\n  "))
+	return fail(ExitContract, "contract_rejected",
+		fmt.Errorf("%d command(s) rejected before sending:\n  %s",
+			len(bad), strings.Join(lines, "\n  ")))
 }
 
 // fieldSummary renders an op's fields as `name:type` pairs, in a stable order.

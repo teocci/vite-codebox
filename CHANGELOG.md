@@ -6,6 +6,66 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-26
+
+codeblox-builder agent skill; per-verb flag validation and a machine-readable failure contract
+
+### Added
+
+- P-5: `codeblox-builder`, the agent skill — six tested scripts plus a SKILL.md that carries only
+  what needs judgment. `resolve_codeblox.py` locates the binary (`--bin`, `$CODEBLOX_BIN`, `$PATH`,
+  then a dev checkout) so no path is hard-coded anywhere; `install_codeblox.py` builds and registers
+  it on the User environment; `doctor.py` preflights; `world.py` digests the published contract;
+  `shapes.py` generates exact coordinates for shells, stairs, arches, and bridges; `submit.py` gates
+  bounds, validates, sends, and reports `addedIds`.
+- P-5: An anchor-drift guard in the e2e suite. `box` anchors at its minimum corner while `sphere` and
+  `cylinder` anchor at their centre — the one piece of geometry `world_info` does not publish, and so
+  the one at risk of silently diverging from the server.
+- I-2: An exit-code taxonomy so a caller can branch on an integer instead of matching prose —
+  `0` success, `2` usage, `3` auth, `4` network, `5` client-side contract rejection (nothing sent),
+  `6` server rejection. Documented in `codeblox help`.
+- I-2: A JSON failure envelope — `{"ok":false,"code":"...","exit":N,"detail":"..."}` on stderr
+  whenever `--json` is given, so one parser covers both the success and failure paths.
+- I-2: `--dry-run` honours `--json`, reporting `validated` and `sent: 0` as a distinct shape from a
+  real submission.
+- I-2: `transport.ErrUnauthorized`, so a refused token is distinguishable from an unreachable server
+  without matching message text.
+- I-3: End-to-end test suite at `clients/codeblox/tests/`, which drives the built binary as a
+  subprocess and so covers what unit tests cannot — stdout/stderr separation and exit codes. Behind
+  `//go:build integration`, so `go test ./...` is unchanged; run it with `npm run test:e2e`.
+- I-3: `npm run test:cli` (unit) and `npm run test:e2e` (integration) as npm entry points.
+
+### Fixed
+
+- P-5: `npm run build:cli` produced an **extensionless** binary on Windows, which `where.exe` cannot
+  find and CreateProcess will not launch, leaving a stale `codeblox.exe` beside it. Now builds with
+  `go build -o bin/`, which names the artifact correctly on every platform.
+- P-5: `codeblox auth status` returned an unclassified exit 1 for failures the build path already
+  reported as auth or network. Both now share one classified `App.connect`.
+- I-1: Every CLI verb shared one flag set carrying all 14 flags, so a flag belonging to another verb
+  parsed cleanly and was silently ignored — `codeblox clear --r 5 --id 9` did nothing and reported
+  success. Each verb now declares only the flags it reads and rejects the rest.
+- I-1: `codeblox exec batch.json --json` silently discarded `--json`, printed prose to stdout, and
+  exited 0, because stdlib `flag` stops at the first non-flag token and nothing checked `NArg()`. No
+  verb takes a positional argument — batches arrive on stdin — and a stray one is now an error.
+  `auth logout` and `auth list` previously accepted a stray argument and succeeded.
+- I-1: `--dry-run` was accepted by `info` and `materials`, which have no dry-run behaviour.
+- I-1: The credential store was opened before argv was validated, so `auth renew --backend file`
+  probed the OS keyring for a subcommand that does not exist, and `box` with no `--mat` probed it
+  before reporting the missing flag. Validation now precedes every side effect.
+- I-1: `Deps.PromptSecret` was declared and read but never assigned, so an interactive `auth login`
+  fell through to the real terminal instead of the injected reader.
+
+### Changed
+
+- I-1: Flag errors now name the verb, the offending token, and the valid set on one line — matching
+  the shape `internal/contract` already uses — and are printed once rather than three times.
+- **I-2 (breaking for callers reading exit codes):** a failing command no longer always exits `1`.
+  Scripts that test for exactly `1` should test for non-zero, or branch on the new taxonomy.
+- **I-2 (breaking):** bare `codeblox` with no arguments now writes usage to **stderr** and exits `2`,
+  where it previously wrote to stdout and exited `0`. `codeblox help` is unchanged — it remains a
+  success on stdout.
+
 ## [0.4.0] - 2026-07-25
 
 Schema-driven build verbs: info, exec, and the ergonomic forms

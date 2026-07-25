@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 
@@ -19,8 +18,11 @@ func main() {
 	defer stop()
 
 	if err := run(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "codeblox: %v\n", err)
-		os.Exit(1)
+		// Failures always go to stderr, rendered as a JSON envelope when the
+		// caller asked for one. The exit code is the contract a script branches
+		// on; see internal/command/exit.go for the taxonomy.
+		command.RenderFailure(os.Stderr, err, command.WantsJSON(os.Args[1:]))
+		os.Exit(command.ExitCodeFor(err))
 	}
 }
 

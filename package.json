@@ -1,7 +1,7 @@
 {
   "name": "codeblox",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "Agent-driven, block-based build engine on Three.js",
   "workspaces": [
@@ -25,7 +25,9 @@
     "pretest": "npm run gen:config",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:cli": "cd clients/codeblox && go build -o bin/codeblox ."
+    "build:cli": "cd clients/codeblox && go build -o bin/ .",
+    "test:cli": "cd clients/codeblox && go test ./...",
+    "test:e2e": "cd clients/codeblox && go test -tags=integration ./tests/"
   },
   "dependencies": {
     "three": "^0.185.1",

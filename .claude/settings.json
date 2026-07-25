@@ -2,7 +2,33 @@
   "permissions": {
     "allow": [
       "Bash(npm --version)",
-      "Bash(go version *)"
+      "Bash(go version *)",
+      "Bash(.venv/Scripts/python -c \"import sys,winreg;print\\(sys.version\\)\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/spf13/cobra/@v/v1.10.2.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/alecthomas/kong/@v/v1.16.0.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/knadh/koanf/v2/@v/v2.3.5.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/urfave/cli/v3/@v/v3.10.1.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/spf13/viper/@v/v1.21.0.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/cpuguy83/go-md2man/v2/@v/v2.0.6.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/russross/blackfriday/v2/@v/v2.1.0.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/inconshreveable/mousetrap/@v/v1.1.0.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/spf13/pflag/@v/v1.0.9.mod\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/go.yaml.in/yaml/v3/@v/v3.0.4.mod\")",
+      "Bash(curl -s --max-time 20 \"https://api.osv.dev/v1/vulns/GHSA-2464-8j7c-4cjm\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -s --max-time 25 https://raw.githubusercontent.com/knadh/koanf/master/README.md)",
+      "Read(//tmp/**)",
+      "Bash(curl -s --max-time 20 \"https://api.github.com/repos/spf13/cobra/contents/\")",
+      "Bash(curl -sL --max-time 25 \"https://raw.githubusercontent.com/wiki/knadh/koanf/Comparison-with-spf13-viper.md\")",
+      "Bash(curl -sL --max-time 20 \"https://raw.githubusercontent.com/spf13/cobra/main/MAINTAINERS\")",
+      "Bash(curl -sL --max-time 20 \"https://raw.githubusercontent.com/spf13/cobra/main/SECURITY.md\")",
+      "Bash(curl -s --max-time 25 \"https://api.github.com/repos/alecthomas/kong/commits?since=2025-07-25T00:00:00Z&per_page=100\")",
+      "Bash(curl -s --max-time 25 \"https://api.github.com/repos/spf13/cobra/commits?since=2025-07-25T00:00:00Z&per_page=100\")",
+      "Bash(curl -s --max-time 20 \"https://api.github.com/repos/urfave/cli/branches?per_page=50\")",
+      "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/urfave/cli/v2/@latest\")",
+      "Read(//c/Users/teocci/.claude/plans/**)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(go test *)"
     ]
   }
 }

@@ -10,9 +10,13 @@ import (
 	"github.com/teocci/vite-codebox/clients/codeblox/internal/creds"
 )
 
-func deps(t *testing.T, stdin string) (Deps, *bytes.Buffer) {
+// deps builds an isolated Deps plus its stdout and stderr buffers. Both streams
+// are returned because which one carries a message is part of the CLI's
+// contract, not an implementation detail: results go to stdout, failures to
+// stderr, and a caller parsing stdout must never find an error there.
+func deps(t *testing.T, stdin string) (Deps, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
-	out := &bytes.Buffer{}
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	return Deps{
 		Env: config.Env{
 			Home:   t.TempDir(),
@@ -21,12 +25,12 @@ func deps(t *testing.T, stdin string) (Deps, *bytes.Buffer) {
 		},
 		Stdin:  strings.NewReader(stdin),
 		Stdout: out,
-		Stderr: &bytes.Buffer{},
-	}, out
+		Stderr: errOut,
+	}, out, errOut
 }
 
 func TestDispatchRejectsAnUnknownCommand(t *testing.T) {
-	d, _ := deps(t, "")
+	d, _, _ := deps(t, "")
 	err := Dispatch(context.Background(), d, []string{"teleport"})
 	if err == nil {
 		t.Fatal("Dispatch accepted an unknown command, want an error")
@@ -36,25 +40,48 @@ func TestDispatchRejectsAnUnknownCommand(t *testing.T) {
 	}
 }
 
-func TestDispatchWithNoArgumentsPrintsUsage(t *testing.T) {
-	d, out := deps(t, "")
-	if err := Dispatch(context.Background(), d, nil); err != nil {
-		t.Fatalf("Dispatch with no args = %v, want nil", err)
+func TestDispatchWithNoArgumentsFailsWithUsageOnStderr(t *testing.T) {
+	// A wrapper that computes an empty argv must not read success. Usage goes to
+	// stderr and the exit code is ExitUsage, so an empty invocation is
+	// indistinguishable from any other argv error to the caller.
+	d, out, errOut := deps(t, "")
+
+	err := Dispatch(context.Background(), d, nil)
+	if err == nil {
+		t.Fatal("Dispatch with no args succeeded, want a usage failure")
+	}
+	if got := ExitCodeFor(err); got != ExitUsage {
+		t.Errorf("exit code %d, want %d", got, ExitUsage)
+	}
+	if !strings.Contains(errOut.String(), "auth") {
+		t.Errorf("usage went to stderr as %q, which does not list the auth command", errOut.String())
+	}
+	if strings.TrimSpace(out.String()) != "" {
+		t.Errorf("wrote %q to stdout; a caller parsing stdout would read it as a result", out.String())
+	}
+}
+
+func TestDispatchHelpStillSucceedsOnStdout(t *testing.T) {
+	// `help` is a request, not a mistake: it succeeds, and its output is the
+	// result, so it belongs on stdout.
+	d, out, _ := deps(t, "")
+	if err := Dispatch(context.Background(), d, []string{"help"}); err != nil {
+		t.Fatalf("help = %v, want nil", err)
 	}
 	if !strings.Contains(out.String(), "auth") {
-		t.Fatalf("usage output %q does not list the auth command", out.String())
+		t.Errorf("help output %q does not list the auth command", out.String())
 	}
 }
 
 func TestDispatchRejectsAuthWithoutASubcommand(t *testing.T) {
-	d, _ := deps(t, "")
+	d, _, _ := deps(t, "")
 	if err := Dispatch(context.Background(), d, []string{"auth"}); err == nil {
 		t.Fatal("Dispatch accepted bare `auth`, want an error")
 	}
 }
 
 func TestDispatchRoutesAuthLoginAndHonoursTheBackendFlag(t *testing.T) {
-	d, out := deps(t, "tok-abcdefghijkl\n")
+	d, out, _ := deps(t, "tok-abcdefghijkl\n")
 	err := Dispatch(context.Background(), d,
 		[]string{"auth", "login", "--with-token", "--backend", "file"})
 	if err != nil {
@@ -78,7 +105,7 @@ func TestDispatchRoutesAuthLoginAndHonoursTheBackendFlag(t *testing.T) {
 }
 
 func TestDispatchRoutesAuthListAsJSON(t *testing.T) {
-	d, out := deps(t, "")
+	d, out, _ := deps(t, "")
 	err := Dispatch(context.Background(), d,
 		[]string{"auth", "list", "--backend", "file", "--json"})
 	if err != nil {
@@ -90,7 +117,7 @@ func TestDispatchRoutesAuthListAsJSON(t *testing.T) {
 }
 
 func TestDispatchVersionPrintsTheVersion(t *testing.T) {
-	d, out := deps(t, "")
+	d, out, _ := deps(t, "")
 	if err := Dispatch(context.Background(), d, []string{"version"}); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +127,7 @@ func TestDispatchVersionPrintsTheVersion(t *testing.T) {
 }
 
 func TestDispatchRejectsAnUnknownAuthSubcommand(t *testing.T) {
-	d, _ := deps(t, "")
+	d, _, _ := deps(t, "")
 	if err := Dispatch(context.Background(), d, []string{"auth", "renew"}); err == nil {
 		t.Fatal("Dispatch accepted an unknown auth subcommand, want an error")
 	}

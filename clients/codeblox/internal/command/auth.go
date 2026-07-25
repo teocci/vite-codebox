@@ -163,46 +163,26 @@ type statusReport struct {
 // Status runs the live check: resolve the credential, connect, and report what
 // the server did with it.
 func (a *App) Status(ctx context.Context, opts StatusOptions) error {
-	endpoint, err := a.Env.Endpoint(opts.Endpoint, opts.ConfigPath)
-	if err != nil {
-		return err
-	}
-
-	token, source, err := creds.Resolve(a.Store, a.Env)
-	if errors.Is(err, creds.ErrNoCredential) {
-		fmt.Fprintf(a.Stdout, "no stored credential for %s\n", endpoint)
-		return errors.New("not authenticated — run `codeblox auth login`")
-	}
-	if err != nil {
-		return err
-	}
-
-	// The guard runs before the dial so a rejected endpoint never puts the
-	// token on the wire.
-	if err := transport.CheckTransportSecurity(endpoint, opts.Insecure); err != nil {
-		return err
-	}
-
-	conn, err := a.dial(ctx, transport.Dialer{
-		Endpoint: endpoint, Token: token, Insecure: opts.Insecure,
+	conn, err := a.connect(ctx, dialOptions{
+		Endpoint: opts.Endpoint, ConfigPath: opts.ConfigPath, Insecure: opts.Insecure,
 	})
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer conn.session.Close()
 
 	report := statusReport{
 		Connected: true,
-		Endpoint:  endpoint,
+		Endpoint:  conn.endpoint,
 		Backend:   a.Store.Name(),
-		Source:    source,
-		Token:     creds.Mask(token),
-		Contract:  len(conn.Contract()) > 0,
+		Source:    conn.source,
+		Token:     creds.Mask(conn.token),
+		Contract:  len(conn.session.Contract()) > 0,
 	}
 	if opts.JSON {
 		return a.emitJSON(report)
 	}
-	fmt.Fprintf(a.Stdout, "connected to %s\n", endpoint)
+	fmt.Fprintf(a.Stdout, "connected to %s\n", conn.endpoint)
 	fmt.Fprintf(a.Stdout, "token: %s   source: %s   backend: %s\n",
 		report.Token, report.Source, report.Backend)
 	if report.Contract {

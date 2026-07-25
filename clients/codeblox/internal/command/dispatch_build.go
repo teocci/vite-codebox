@@ -1,66 +1,116 @@
 package command
 
-import (
-	"context"
-	"flag"
-	"fmt"
-)
+import "context"
 
-// buildFlags is the flag set shared by every world-facing verb.
+// buildFlags carries the flags a world-facing verb may accept. Every field is a
+// value, not a pointer: a verb registers only its own flags, and the fields it
+// never registers keep their zero value rather than a nil pointer to deref.
 type buildFlags struct {
-	fs       *flag.FlagSet
-	backend  *string
-	cfgPath  *string
-	endpoint *string
-	insecure *bool
-	asJSON   *bool
-	dryRun   *bool
-	refresh  *bool
-	family   *string
-	at       *string
-	size     *string
-	radius   *int
-	height   *int
-	id       *int
-	mat      *string
+	flagSurface
+
+	backend  string
+	cfgPath  string
+	endpoint string
+	insecure bool
+	asJSON   bool
+
+	dryRun  bool
+	refresh bool
+	family  string
+	at      string
+	size    string
+	radius  int
+	height  int
+	id      int
+	mat     string
 }
 
-func newBuildFlags(verb string, out interface{ Write([]byte) (int, error) }) *buildFlags {
-	fs := flag.NewFlagSet(verb, flag.ContinueOnError)
-	fs.SetOutput(out)
-	return &buildFlags{
-		fs:       fs,
-		backend:  fs.String("backend", "", "credential backend: keyring or file"),
-		cfgPath:  fs.String("config", "", "path to the settings file"),
-		endpoint: fs.String("endpoint", "", "server endpoint (ws:// or wss://)"),
-		insecure: fs.Bool("insecure", false, "allow plain ws:// to a remote host"),
-		asJSON:   fs.Bool("json", false, "emit a compact JSON report"),
-		dryRun:   fs.Bool("dry-run", false, "validate against the contract without sending"),
-		refresh:  fs.Bool("refresh", false, "re-fetch the contract instead of using the cache"),
-		family:   fs.String("family", "", "limit materials to one render family"),
-		at:       fs.String("at", "", "position as x,y,z (box: min corner; sphere/cylinder: centre)"),
-		size:     fs.String("size", "", "box extent as w,h,d"),
-		radius:   fs.Int("r", 0, "radius in blocks"),
-		height:   fs.Int("h", 0, "height in blocks"),
-		id:       fs.Int("id", -1, "part id to remove"),
-		mat:      fs.String("mat", "", "material name"),
+// registerCommon adds the five flags every world-facing verb accepts.
+func (b *buildFlags) registerCommon() {
+	b.fs.StringVar(&b.backend, "backend", "", "credential backend: keyring or file")
+	b.fs.StringVar(&b.cfgPath, "config", "", "path to the settings file")
+	b.fs.StringVar(&b.endpoint, "endpoint", "", "server endpoint (ws:// or wss://)")
+	b.fs.BoolVar(&b.insecure, "insecure", false, "allow plain ws:// to a remote host")
+	b.fs.BoolVar(&b.asJSON, "json", false, "emit a compact JSON report")
+}
+
+func (b *buildFlags) registerDryRun() {
+	b.fs.BoolVar(&b.dryRun, "dry-run", false, "validate against the contract without sending")
+}
+
+func (b *buildFlags) registerPlacement() {
+	b.registerDryRun()
+	b.fs.StringVar(&b.at, "at", "", "position as x,y,z (box: min corner; sphere/cylinder: centre)")
+	b.fs.StringVar(&b.mat, "mat", "", "material name")
+}
+
+// buildVerbs declares each world-facing verb's flag surface beyond the common
+// five. A verb absent from this map does not exist — the lookup is what rejects
+// an unknown command before anything opens a credential store.
+var buildVerbs = map[string]func(*buildFlags){
+	"info": func(*buildFlags) {},
+	"materials": func(b *buildFlags) {
+		b.fs.StringVar(&b.family, "family", "", "limit materials to one render family")
+		b.fs.BoolVar(&b.refresh, "refresh", false, "re-fetch the contract instead of using the cache")
+	},
+	"exec":  (*buildFlags).registerDryRun,
+	"clear": (*buildFlags).registerDryRun,
+	"remove": func(b *buildFlags) {
+		b.registerDryRun()
+		b.fs.IntVar(&b.id, "id", -1, "part id to remove")
+	},
+	"box": func(b *buildFlags) {
+		b.registerPlacement()
+		b.fs.StringVar(&b.size, "size", "", "box extent as w,h,d")
+	},
+	"sphere": func(b *buildFlags) {
+		b.registerPlacement()
+		b.fs.IntVar(&b.radius, "r", 0, "radius in blocks")
+	},
+	"cylinder": func(b *buildFlags) {
+		b.registerPlacement()
+		b.fs.IntVar(&b.radius, "r", 0, "radius in blocks")
+		b.fs.IntVar(&b.height, "h", 0, "height in blocks")
+	},
+}
+
+// newBuildFlags builds the flag set for one verb, or reports that the verb does
+// not exist.
+func newBuildFlags(verb string) (*buildFlags, error) {
+	register, ok := buildVerbs[verb]
+	if !ok {
+		return nil, usagef("unknown command %q", verb)
 	}
+	b := &buildFlags{flagSurface: newFlagSurface(verb), id: -1}
+	b.registerCommon()
+	register(b)
+	return b, nil
 }
 
 func (b *buildFlags) exec() ExecOptions {
 	return ExecOptions{
-		Endpoint: *b.endpoint, ConfigPath: *b.cfgPath, Insecure: *b.insecure,
-		JSON: *b.asJSON, DryRun: *b.dryRun,
+		Endpoint: b.endpoint, ConfigPath: b.cfgPath, Insecure: b.insecure,
+		JSON: b.asJSON, DryRun: b.dryRun,
 	}
 }
 
-// dispatchBuild routes the world-facing verbs.
+// dispatchBuild routes the world-facing verbs. Argv is fully validated, and the
+// verb's own command is built, before the credential store is opened — nothing
+// should touch the keyring to discover that --mat is missing.
 func dispatchBuild(ctx context.Context, d Deps, verb string, args []string) error {
-	f := newBuildFlags(verb, d.Stderr)
-	if err := f.fs.Parse(args); err != nil {
+	f, err := newBuildFlags(verb)
+	if err != nil {
 		return err
 	}
-	app, err := d.app(*f.backend)
+	if err := f.parse(args); err != nil {
+		return err
+	}
+	cmd, err := f.command()
+	if err != nil {
+		return err
+	}
+
+	app, err := d.app(f.backend)
 	if err != nil {
 		return err
 	}
@@ -68,68 +118,73 @@ func dispatchBuild(ctx context.Context, d Deps, verb string, args []string) erro
 	switch verb {
 	case "info":
 		return app.Info(ctx, InfoOptions{
-			Endpoint: *f.endpoint, ConfigPath: *f.cfgPath, Insecure: *f.insecure, JSON: *f.asJSON,
+			Endpoint: f.endpoint, ConfigPath: f.cfgPath, Insecure: f.insecure, JSON: f.asJSON,
 		})
 	case "materials":
 		return app.Materials(ctx, MaterialsOptions{
-			Endpoint: *f.endpoint, ConfigPath: *f.cfgPath, Insecure: *f.insecure,
-			JSON: *f.asJSON, Family: *f.family, Refresh: *f.refresh,
+			Endpoint: f.endpoint, ConfigPath: f.cfgPath, Insecure: f.insecure,
+			JSON: f.asJSON, Family: f.family, Refresh: f.refresh,
 		})
 	case "exec":
 		return app.Exec(ctx, f.exec())
-	case "clear":
-		return app.RunOne(ctx, map[string]any{"op": "clear"}, f.exec())
-	case "remove":
-		if *f.id < 0 {
-			return fmt.Errorf("remove needs --id <non-negative integer>")
-		}
-		return app.RunOne(ctx, map[string]any{"op": "remove", "id": float64(*f.id)}, f.exec())
-	case "box", "sphere", "cylinder":
-		cmd, err := shapeCommand(verb, f)
-		if err != nil {
-			return err
-		}
-		return app.RunOne(ctx, cmd, f.exec())
 	default:
-		return fmt.Errorf("unknown command %q", verb)
+		return app.RunOne(ctx, cmd, f.exec())
+	}
+}
+
+// command builds the single command a verb sends, validating that verb's own
+// flags. It returns nil for the verbs that send no single command.
+func (b *buildFlags) command() (map[string]any, error) {
+	switch b.verb {
+	case "info", "materials", "exec":
+		return nil, nil
+	case "clear":
+		return map[string]any{"op": "clear"}, nil
+	case "remove":
+		if b.id < 0 {
+			return nil, usagef("remove needs --id <non-negative integer>")
+		}
+		return map[string]any{"op": "remove", "id": float64(b.id)}, nil
+	default:
+		return shapeCommand(b)
 	}
 }
 
 // shapeCommand builds the command for an ergonomic part verb.
-func shapeCommand(verb string, f *buildFlags) (map[string]any, error) {
-	if *f.mat == "" {
-		return nil, fmt.Errorf("%s needs --mat <material> (run `codeblox materials`)", verb)
+func shapeCommand(b *buildFlags) (map[string]any, error) {
+	if b.mat == "" {
+		return nil, usagef("%s needs --mat <material> (run `codeblox materials`)", b.verb)
 	}
-	if *f.at == "" {
-		return nil, fmt.Errorf("%s needs --at x,y,z", verb)
+	if b.at == "" {
+		return nil, usagef("%s needs --at x,y,z", b.verb)
 	}
-	at, err := ParseInt3(*f.at)
+	at, err := ParseInt3(b.at)
 	if err != nil {
-		return nil, fmt.Errorf("--at: %w", err)
+		return nil, usagef("--at: %w", err)
 	}
-	cmd := map[string]any{"op": verb, "at": at, "mat": *f.mat}
+	cmd := map[string]any{"op": b.verb, "at": at, "mat": b.mat}
 
-	switch verb {
+	switch b.verb {
 	case "box":
-		if *f.size == "" {
-			return nil, fmt.Errorf("box needs --size w,h,d")
+		if b.size == "" {
+			return nil, usagef("box needs --size w,h,d")
 		}
-		size, err := ParseInt3(*f.size)
+		size, err := ParseInt3(b.size)
 		if err != nil {
-			return nil, fmt.Errorf("--size: %w", err)
+			return nil, usagef("--size: %w", err)
 		}
 		cmd["size"] = size
 	case "sphere":
-		if *f.radius <= 0 {
-			return nil, fmt.Errorf("sphere needs --r <positive integer>")
+		if b.radius <= 0 {
+			return nil, usagef("sphere needs --r <positive integer>")
 		}
-		cmd["r"] = float64(*f.radius)
+		cmd["r"] = float64(b.radius)
 	case "cylinder":
-		if *f.radius <= 0 || *f.height <= 0 {
-			return nil, fmt.Errorf("cylinder needs --r and --h as positive integers")
+		if b.radius <= 0 || b.height <= 0 {
+			return nil, usagef("cylinder needs --r and --h as positive integers")
 		}
-		cmd["r"] = float64(*f.radius)
-		cmd["h"] = float64(*f.height)
+		cmd["r"] = float64(b.radius)
+		cmd["h"] = float64(b.height)
 	}
 	return cmd, nil
 }

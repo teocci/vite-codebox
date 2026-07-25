@@ -73,6 +73,13 @@ Single operator, agent-driven. Commits and release tags land directly on `main`;
 branch guards (§7b guard 1) are inert in trunk mode. Escalate to a short-lived branch only for
 risky work, merging before the release.
 
+### There are two version sites
+`package.json`'s `"version"` is the source of truth, but the Go CLI carries its own
+`command.Version` constant in `clients/codeblox/internal/command/dispatch.go`. A release must bump
+**both**. It drifted once already (the CLI still said `0.3.0` at v0.4.0), and it matters more than it
+looks: the skill's `resolve_codeblox.py` runs `codeblox version` as its health check, so a stale
+constant misreports which binary is in use.
+
 ### Version bump baseline
 `v0.2.0` is the baseline release covering the pre-tracking work (Phases 1–2, built before this
 tracking structure existed). Phase and item ids therefore start allocating at `P-3` / `I-1` / `F-1`.

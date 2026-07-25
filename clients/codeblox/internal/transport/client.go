@@ -149,12 +149,18 @@ func handshake(ctx context.Context, ws *websocket.Conn, token string) (Welcome, 
 	return Welcome{}, fmt.Errorf("unexpected first frame of type %q, want %q", welcome.Type, "welcome")
 }
 
+// ErrUnauthorized means the server closed with 4001: it answered, and refused
+// this token. Exported as a sentinel so the caller can tell "your credential is
+// wrong" (re-authenticate) from "the server is unreachable" (retry) without
+// matching the message text.
+var ErrUnauthorized = errors.New("unauthorized — the server rejected this token")
+
 // rejectionReason turns the server's close code into something actionable. The
 // server closes 4001 when the token does not match.
 func rejectionReason(err error) error {
 	var closeErr websocket.CloseError
 	if errors.As(err, &closeErr) && closeErr.Code == 4001 {
-		return errors.New("unauthorized — the server rejected this token")
+		return ErrUnauthorized
 	}
 	return err
 }
