@@ -110,7 +110,7 @@ func dispatchBuild(ctx context.Context, d Deps, verb string, args []string) erro
 		return err
 	}
 
-	app, err := d.app(f.backend)
+	app, err := d.buildApp(f.backend)
 	if err != nil {
 		return err
 	}

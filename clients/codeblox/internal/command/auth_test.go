@@ -14,8 +14,8 @@ import (
 	"github.com/teocci/vite-codebox/clients/codeblox/internal/transport"
 )
 
-// app wires an App onto temp dirs, a file credential store, and buffers.
-func app(t *testing.T, stdin string, vars map[string]string) (*App, *bytes.Buffer) {
+// app wires an authApp onto temp dirs, a file credential store, and buffers.
+func app(t *testing.T, stdin string, vars map[string]string) (*authApp, *bytes.Buffer) {
 	t.Helper()
 	e := config.Env{
 		Home:   t.TempDir(),
@@ -27,13 +27,12 @@ func app(t *testing.T, stdin string, vars map[string]string) (*App, *bytes.Buffe
 		t.Fatal(err)
 	}
 	out := &bytes.Buffer{}
-	return &App{
+	return &authApp{base: base{
 		Env:    e,
 		Store:  store,
 		Stdin:  strings.NewReader(stdin),
 		Stdout: out,
-		Stderr: &bytes.Buffer{},
-	}, out
+	}}, out
 }
 
 // readFile is a test-only helper for asserting on file contents.

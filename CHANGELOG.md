@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-26
+
+Split App along its two domains: a type per concern over a shared base
+
+### Changed
+
+- I-4: The CLI's `internal/command` package now has a type per domain — `authApp` for the credential
+  lifecycle, `buildApp` for world building — over a shared `base` carrying the injected substrate.
+  One `App` had been holding all nine verbs, so nothing but the file split kept a build verb from
+  reaching a credential prompt. Internal only: no verb, flag, exit code, stream, or JSON shape
+  changes, and `internal/` is not importable from outside the module.
+
+### Removed
+
+- I-4: `App.Stderr`, which was populated at construction and read by nothing — failures are rendered
+  by `Dispatch`'s caller.
+
 ## [0.5.0] - 2026-07-26
 
 codeblox-builder agent skill; per-verb flag validation and a machine-readable failure contract

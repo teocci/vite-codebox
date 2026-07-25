@@ -42,7 +42,10 @@ func (f *fakeSession) SendBatch(_ context.Context, batch []any) (transport.Ack, 
 	return f.ack, nil
 }
 
-func buildApp(t *testing.T, stdin string) (*App, *bytes.Buffer, *fakeSession) {
+// newBuildApp wires a buildApp onto temp dirs, a stocked file credential store,
+// and a fake session. Named for what it returns — the bare `buildApp` is the
+// type itself now.
+func newBuildApp(t *testing.T, stdin string) (*buildApp, *bytes.Buffer, *fakeSession) {
 	t.Helper()
 	e := config.Env{
 		Home:   t.TempDir(),
@@ -58,16 +61,15 @@ func buildApp(t *testing.T, stdin string) (*App, *bytes.Buffer, *fakeSession) {
 	}
 	session := &fakeSession{ack: transport.Ack{AddedIDs: []int{1}}}
 	out := &bytes.Buffer{}
-	return &App{
+	return &buildApp{base: base{
 		Env:    e,
 		Store:  store,
 		Stdin:  strings.NewReader(stdin),
 		Stdout: out,
-		Stderr: &bytes.Buffer{},
 		Dial: func(context.Context, transport.Dialer) (Session, error) {
 			return session, nil
 		},
-	}, out, session
+	}}, out, session
 }
 
 // ── batch parsing ───────────────────────────────────────────────────────────
@@ -127,7 +129,7 @@ func TestParseBatchRejectsEmptyInput(t *testing.T) {
 // ── exec ────────────────────────────────────────────────────────────────────
 
 func TestExecSendsAValidBatchAndReportsTheAck(t *testing.T) {
-	a, out, session := buildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"granite"}]`)
+	a, out, session := newBuildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"granite"}]`)
 
 	if err := a.Exec(context.Background(), ExecOptions{JSON: true}); err != nil {
 		t.Fatal(err)
@@ -145,7 +147,7 @@ func TestExecSendsAValidBatchAndReportsTheAck(t *testing.T) {
 }
 
 func TestExecRejectsAnUnknownMaterialWithoutSendingAnything(t *testing.T) {
-	a, _, session := buildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"unobtanium"}]`)
+	a, _, session := newBuildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"unobtanium"}]`)
 
 	err := a.Exec(context.Background(), ExecOptions{})
 	if err == nil {
@@ -161,7 +163,7 @@ func TestExecRejectsAnUnknownMaterialWithoutSendingAnything(t *testing.T) {
 }
 
 func TestExecRejectsAnUnknownOpWithoutSendingAnything(t *testing.T) {
-	a, _, session := buildApp(t, `[{"op":"teleport"}]`)
+	a, _, session := newBuildApp(t, `[{"op":"teleport"}]`)
 
 	if err := a.Exec(context.Background(), ExecOptions{}); err == nil {
 		t.Fatal("Exec sent an unknown op, want a client-side rejection")
@@ -172,7 +174,7 @@ func TestExecRejectsAnUnknownOpWithoutSendingAnything(t *testing.T) {
 }
 
 func TestExecDryRunValidatesWithoutSending(t *testing.T) {
-	a, out, session := buildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"granite"}]`)
+	a, out, session := newBuildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"granite"}]`)
 
 	if err := a.Exec(context.Background(), ExecOptions{DryRun: true}); err != nil {
 		t.Fatal(err)
@@ -186,7 +188,7 @@ func TestExecDryRunValidatesWithoutSending(t *testing.T) {
 }
 
 func TestExecSurfacesServerSideErrorsAsAFailure(t *testing.T) {
-	a, _, session := buildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"granite"}]`)
+	a, _, session := newBuildApp(t, `[{"op":"box","at":[0,0,0],"size":[4,4,4],"mat":"granite"}]`)
 	session.ack = transport.Ack{Errors: []transport.CommandError{
 		{Errors: []string{"part is out of world bounds"}},
 	}}
@@ -203,7 +205,7 @@ func TestExecSurfacesServerSideErrorsAsAFailure(t *testing.T) {
 // ── ergonomic forms ─────────────────────────────────────────────────────────
 
 func TestBoxFormSendsTheEquivalentCommand(t *testing.T) {
-	a, _, session := buildApp(t, "")
+	a, _, session := newBuildApp(t, "")
 
 	err := a.RunOne(context.Background(), map[string]any{
 		"op": "box", "at": []any{0.0, 0.0, 0.0}, "size": []any{2.0, 3.0, 4.0}, "mat": "gold",
@@ -245,7 +247,7 @@ func TestParseInt3RejectsANonInteger(t *testing.T) {
 // ── info and materials ──────────────────────────────────────────────────────
 
 func TestInfoCachesTheContract(t *testing.T) {
-	a, _, _ := buildApp(t, "")
+	a, _, _ := newBuildApp(t, "")
 
 	if err := a.Info(context.Background(), InfoOptions{JSON: true}); err != nil {
 		t.Fatal(err)
@@ -256,7 +258,7 @@ func TestInfoCachesTheContract(t *testing.T) {
 }
 
 func TestMaterialsListsNamesFromTheCacheWithoutConnecting(t *testing.T) {
-	a, out, _ := buildApp(t, "")
+	a, out, _ := newBuildApp(t, "")
 	if err := a.Info(context.Background(), InfoOptions{JSON: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +280,7 @@ func TestMaterialsListsNamesFromTheCacheWithoutConnecting(t *testing.T) {
 }
 
 func TestMaterialsFiltersByFamily(t *testing.T) {
-	a, out, _ := buildApp(t, "")
+	a, out, _ := newBuildApp(t, "")
 	if err := a.Info(context.Background(), InfoOptions{JSON: true}); err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@ import (
 //
 // This is a second version site: the project's source of truth is package.json,
 // and a release must bump both. docs/conventions/tracking.md records that.
-const Version = "0.5.0"
+const Version = "0.6.0"
 
 const usage = `codeblox — command a codeblox build server
 
@@ -167,7 +167,7 @@ func dispatchAuth(ctx context.Context, d Deps, args []string) error {
 		return err
 	}
 
-	app, err := d.app(f.backend)
+	app, err := d.authApp(f.backend)
 	if err != nil {
 		return err
 	}
@@ -188,8 +188,18 @@ func dispatchAuth(ctx context.Context, d Deps, args []string) error {
 	}
 }
 
-// app builds the App, opening the credential store with the selected backend.
-func (d Deps) app(backend string) (*App, error) {
+// newBase builds the substrate both domains share, opening the credential store
+// with the selected backend.
+//
+// The store is opened for build verbs too, not just auth ones: connect resolves
+// the token from it, so every verb that dials needs it. `materials` served from
+// cache is the lone exception, and special-casing it would buy a branch here in
+// exchange for nothing a user can observe.
+//
+// Stderr is deliberately absent. Failures are rendered by Dispatch's caller
+// (RenderFailure in main.go), so no verb writes to it — the field was carried on
+// the old App and read by nothing.
+func (d Deps) newBase(backend string) (base, error) {
 	open := d.OpenStore
 	if open == nil {
 		open = creds.Open
@@ -197,15 +207,32 @@ func (d Deps) app(backend string) (*App, error) {
 	store, err := open(d.Env, backend)
 	if err != nil {
 		// The only failure here is an unrecognised --backend value.
-		return nil, fail(ExitUsage, "usage", err)
+		return base{}, fail(ExitUsage, "usage", err)
 	}
-	return &App{
-		Env:          d.Env,
-		Store:        store,
-		Stdin:        d.Stdin,
-		Stdout:       d.Stdout,
-		Stderr:       d.Stderr,
-		Dial:         d.Dial,
-		PromptSecret: d.PromptSecret,
+	return base{
+		Env:    d.Env,
+		Store:  store,
+		Stdin:  d.Stdin,
+		Stdout: d.Stdout,
+		Dial:   d.Dial,
 	}, nil
+}
+
+// authApp builds the credential-lifecycle half.
+func (d Deps) authApp(backend string) (*authApp, error) {
+	b, err := d.newBase(backend)
+	if err != nil {
+		return nil, err
+	}
+	return &authApp{base: b, PromptSecret: d.PromptSecret}, nil
+}
+
+// buildApp builds the world-building half. It gets no PromptSecret: no build
+// verb may ask for a secret, and now none can.
+func (d Deps) buildApp(backend string) (*buildApp, error) {
+	b, err := d.newBase(backend)
+	if err != nil {
+		return nil, err
+	}
+	return &buildApp{base: b}, nil
 }

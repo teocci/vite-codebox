@@ -1,7 +1,7 @@
 {
   "name": "codeblox",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "Agent-driven, block-based build engine on Three.js",
   "workspaces": [

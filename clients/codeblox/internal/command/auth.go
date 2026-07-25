@@ -1,13 +1,7 @@
-// Package command implements the codeblox CLI verbs.
-//
-// App holds the injected dependencies (host environment, credential store, I/O
-// streams, dialer) so every verb is testable without touching the real keyring,
-// the real home directory, or the network.
 package command
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,31 +12,16 @@ import (
 
 	"github.com/teocci/vite-codebox/clients/codeblox/internal/config"
 	"github.com/teocci/vite-codebox/clients/codeblox/internal/creds"
-	"github.com/teocci/vite-codebox/clients/codeblox/internal/transport"
 )
 
-// Session is a live, authenticated connection to a codeblox server. It exists so
-// the verbs can be tested against a fake without a socket; *transport.Conn is the
-// production implementation.
-type Session interface {
-	// Contract is the server's published world_info, raw.
-	Contract() json.RawMessage
-	// SendBatch submits a command batch and returns the server's ack.
-	SendBatch(context.Context, []any) (transport.Ack, error)
-	Close() error
-}
+// authApp owns the credential lifecycle: obtaining a token, storing it,
+// reporting it, and checking it against the server.
+//
+// PromptSecret is the one field that belongs to this domain alone — no build
+// verb has any business asking for a secret.
+type authApp struct {
+	base
 
-// App is the CLI's injected context.
-type App struct {
-	Env    config.Env
-	Store  creds.Backend
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
-
-	// Dial opens a connection. Injected so tests need no server; nil means use
-	// the real dialer.
-	Dial func(context.Context, transport.Dialer) (Session, error)
 	// PromptSecret reads a secret without echoing. nil means use the terminal.
 	PromptSecret func(prompt string) (string, error)
 }
@@ -66,7 +45,7 @@ type StatusOptions struct {
 
 // Login obtains a token, stores it, and optionally records the endpoint. The
 // token is never echoed and never written to the settings file.
-func (a *App) Login(opts LoginOptions) error {
+func (a *authApp) Login(opts LoginOptions) error {
 	token, err := a.readToken(opts.FromStdin)
 	if err != nil {
 		return err
@@ -96,7 +75,7 @@ func (a *App) Login(opts LoginOptions) error {
 
 // Logout removes the stored credential. Having nothing to remove is reported,
 // not treated as a failure — the end state the user asked for already holds.
-func (a *App) Logout() error {
+func (a *authApp) Logout() error {
 	err := a.Store.Delete()
 	if errors.Is(err, creds.ErrNoCredential) {
 		fmt.Fprintf(a.Stdout, "no stored credential in the %s backend — nothing to remove\n", a.Store.Name())
@@ -118,7 +97,7 @@ type listReport struct {
 }
 
 // List shows the stored credential, always masked.
-func (a *App) List(asJSON bool) error {
+func (a *authApp) List(asJSON bool) error {
 	endpoint, err := a.Env.Endpoint("", "")
 	if err != nil {
 		return err
@@ -162,7 +141,7 @@ type statusReport struct {
 
 // Status runs the live check: resolve the credential, connect, and report what
 // the server did with it.
-func (a *App) Status(ctx context.Context, opts StatusOptions) error {
+func (a *authApp) Status(ctx context.Context, opts StatusOptions) error {
 	conn, err := a.connect(ctx, dialOptions{
 		Endpoint: opts.Endpoint, ConfigPath: opts.ConfigPath, Insecure: opts.Insecure,
 	})
@@ -195,7 +174,7 @@ func (a *App) Status(ctx context.Context, opts StatusOptions) error {
 }
 
 // readToken gets the secret from stdin or a no-echo prompt.
-func (a *App) readToken(fromStdin bool) (string, error) {
+func (a *authApp) readToken(fromStdin bool) (string, error) {
 	if fromStdin {
 		raw, err := io.ReadAll(a.Stdin)
 		if err != nil {
@@ -230,7 +209,7 @@ func promptSecret(prompt string) (string, error) {
 }
 
 // saveEndpoint validates and persists a non-secret endpoint override.
-func (a *App) saveEndpoint(opts LoginOptions) error {
+func (a *authApp) saveEndpoint(opts LoginOptions) error {
 	if err := config.ValidateEndpoint(opts.Endpoint); err != nil {
 		return err
 	}
@@ -240,20 +219,4 @@ func (a *App) saveEndpoint(opts LoginOptions) error {
 	}
 	cfg.Endpoint = opts.Endpoint
 	return cfg.Save(a.Env.ConfigPath(opts.ConfigPath))
-}
-
-func (a *App) dial(ctx context.Context, d transport.Dialer) (Session, error) {
-	if a.Dial != nil {
-		return a.Dial(ctx, d)
-	}
-	return d.Connect(ctx)
-}
-
-func (a *App) emitJSON(v any) error {
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Errorf("encode report: %w", err)
-	}
-	_, err = fmt.Fprintln(a.Stdout, string(raw))
-	return err
 }

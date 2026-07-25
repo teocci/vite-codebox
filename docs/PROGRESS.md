@@ -1,14 +1,16 @@
 # Progress
 
-**Current version:** 0.5.0
-**Active phase:** none — **v0.5.0 released**, closing the plan. P-5 (the codeblox-builder skill)
-shipped with its three prerequisite items: I-1 (per-verb flag validation), I-3 (end-to-end test
-harness), and I-2 (machine-readable failure contract). 297 tests: 59 vitest, 107 Go unit, 27 Go e2e,
-104 pytest (skill).
+**Current version:** 0.6.0
+**Active phase:** none — **v0.6.0 released**, closing the plan. P-6 split `App` along its two domains
+(I-4), the hygiene item deferred past P-5. 298 tests: 59 vitest, 111 Go unit, 24 Go e2e, 104 pytest
+(skill).
 
-> Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go". Those figures were
-> understated even then — a run at that commit gives more — so treat 297 as the first count taken
-> from an actual run rather than as the size of one release's delta.
+> Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
+> v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
+> functions and had 24 at that commit, so the v0.5.0 total should read 294 (59 + 107 + 24 + 104).
+> Counts here are **top-level `func Test…`**, which is the method that reproduces the v0.5.0 unit
+> figure of 107; counting subtests instead gives a much larger number. The v0.5.0 line is left as
+> published rather than rewritten after the fact.
 
 Test commands: `npm test` (vitest) · `npm run test:cli` (Go unit) · `npm run test:e2e` (Go
 integration, `//go:build integration`, skips the world tests when no server is listening).
@@ -22,21 +24,38 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 3 | codeblox CLI foundation — config, credentials, transport | done |
 | 4 | Schema-driven build verbs — info, exec, and the ergonomic forms | done |
 | 5 | codeblox-builder agent skill (carries I-1, I-3, I-2) | done |
+| 6 | Split `App` along its two domains | done |
 
 ## Next action
 
-The plan is closed; nothing is scheduled. Two threads remain, neither blocking:
+The plan is closed; nothing is scheduled. One thread remains, and it is the only one that changes
+what the product can do:
 
-- **I-4** — split `App` along its two domains (credential lifecycle vs world building; 9 public
-  methods, at the god-object ceiling). Hygiene, not a defect. Deliberately deferred past P-5 so a
-  refactor of shipped code would not tangle with new work.
-- **WSS/TLS**, still outstanding from Phase 2. The server runs plain `ws`, and the CLI refuses to
-  send a token over `ws://` to a non-loopback host — so remote use is blocked loudly rather than
-  silently, but it is blocked. This is the gate on running the server anywhere but localhost.
+**WSS/TLS**, outstanding from Phase 2. The server runs plain `ws`, and the CLI
+refuses to send a token over `ws://` to a non-loopback host — so remote use is blocked loudly rather
+than silently, but it is blocked. This is the gate on running the server anywhere but localhost.
 
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> P-6 (v0.6.0): Split `App`, which had grown to 9 public methods across two unrelated concerns —
+> credential lifecycle and world building — sharing only the injected substrate. Now a `base` struct
+> embedded in `authApp` and `buildApp`, with `base` and everything connection-shaped moved to a new
+> `app.go`; `Deps.app` became `newBase` plus two constructors, and `buildApp` is handed no
+> `PromptSecret`, which is where the boundary is actually enforced. The honest measure: it narrows the
+> **method set**, not the data — `Env`, `Store`, `Stdout`, `Dial` and even `Stdin` are used by both
+> halves (`Stdin` carries the token for `auth login` and the batch for `exec`), so `PromptSecret` is
+> the only genuinely domain-owned field. What changed is that a build verb can no longer reach a
+> credential prompt, enforced by the compiler rather than by which file a function was typed into.
+> `connect`/`session` stayed shared on purpose: I-2 consolidated them because `auth status` had been
+> duplicating those steps and returning an unclassified exit 1, so a per-half copy would have reopened
+> that — `base.connect`'s doc comment now names I-2 so the reason travels with the code. `App.Stderr`
+> was dropped, having been populated at construction and read by nothing. Behaviour-preserving, and
+> the evidence is that no test assertion was edited — only the two constructors the tests call. Four
+> new reflection guards in `app_test.go` pin the boundary, since the compiler is equally happy if
+> someone re-merges the halves. `-race` was not run: it needs cgo and this toolchain has no C
+> compiler. Detail: `docs/phases/phase-6.md` · `docs/improvements/improvement-4.md`.
 
 > P-5 (v0.5.0): Built `.claude/skills/codeblox-builder/` — the agent skill, script-first.
 > Six scripts, each justified by one probabilistic failure it removes: `resolve_codeblox.py` (no path

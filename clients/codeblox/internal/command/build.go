@@ -11,12 +11,18 @@ import (
 	"strings"
 
 	"github.com/teocci/vite-codebox/clients/codeblox/internal/contract"
-	"github.com/teocci/vite-codebox/clients/codeblox/internal/creds"
 	"github.com/teocci/vite-codebox/clients/codeblox/internal/transport"
 )
 
 // vectorLen is the arity of a coordinate/extent flag such as --at 0,0,0.
 const vectorLen = 3
+
+// buildApp owns world building: fetching the server's published contract and
+// submitting batches validated against it. It reaches the network through the
+// embedded base, which it shares with authApp.
+type buildApp struct {
+	base
+}
 
 // ExecOptions configures the command-submitting verbs.
 type ExecOptions struct {
@@ -132,7 +138,7 @@ func ParseInt3(value string) ([]any, error) {
 }
 
 // Exec reads a batch from stdin and submits it.
-func (a *App) Exec(ctx context.Context, opts ExecOptions) error {
+func (a *buildApp) Exec(ctx context.Context, opts ExecOptions) error {
 	batch, err := ParseBatch(a.Stdin)
 	if err != nil {
 		// Malformed or empty stdin is the caller's input, not a server problem.
@@ -142,7 +148,7 @@ func (a *App) Exec(ctx context.Context, opts ExecOptions) error {
 }
 
 // RunOne submits a single command — the ergonomic box/sphere/cylinder forms.
-func (a *App) RunOne(ctx context.Context, cmd map[string]any, opts ExecOptions) error {
+func (a *buildApp) RunOne(ctx context.Context, cmd map[string]any, opts ExecOptions) error {
 	return a.RunBatch(ctx, []map[string]any{cmd}, opts)
 }
 
@@ -152,7 +158,7 @@ func (a *App) RunOne(ctx context.Context, cmd map[string]any, opts ExecOptions) 
 // round trip and keeps a typo from reaching the world. The server still
 // re-validates as the authority — notably world bounds, which the published
 // schema does not describe.
-func (a *App) RunBatch(ctx context.Context, batch []map[string]any, opts ExecOptions) error {
+func (a *buildApp) RunBatch(ctx context.Context, batch []map[string]any, opts ExecOptions) error {
 	session, spec, err := a.session(ctx, dialOptions{
 		Endpoint: opts.Endpoint, ConfigPath: opts.ConfigPath, Insecure: opts.Insecure,
 	})
@@ -181,7 +187,7 @@ func (a *App) RunBatch(ctx context.Context, batch []map[string]any, opts ExecOpt
 }
 
 // reportAck renders the server's ack and fails when it carries command errors.
-func (a *App) reportAck(ack transport.Ack, sent int, asJSON bool) error {
+func (a *buildApp) reportAck(ack transport.Ack, sent int, asJSON bool) error {
 	var reasons []string
 	for _, e := range ack.Errors {
 		reasons = append(reasons, strings.Join(e.Errors, "; "))
@@ -210,7 +216,7 @@ func (a *App) reportAck(ack transport.Ack, sent int, asJSON bool) error {
 }
 
 // Info fetches the contract, caches it, and prints it.
-func (a *App) Info(ctx context.Context, opts InfoOptions) error {
+func (a *buildApp) Info(ctx context.Context, opts InfoOptions) error {
 	session, spec, err := a.session(ctx, dialOptions{
 		Endpoint: opts.Endpoint, ConfigPath: opts.ConfigPath, Insecure: opts.Insecure,
 	})
@@ -235,7 +241,7 @@ func (a *App) Info(ctx context.Context, opts InfoOptions) error {
 }
 
 // Materials lists the palette, preferring the cache so it needs no server.
-func (a *App) Materials(ctx context.Context, opts MaterialsOptions) error {
+func (a *buildApp) Materials(ctx context.Context, opts MaterialsOptions) error {
 	spec, err := a.contractFromCache(ctx, opts)
 	if err != nil {
 		return err
@@ -263,7 +269,7 @@ func (a *App) Materials(ctx context.Context, opts MaterialsOptions) error {
 
 // contractFromCache returns the cached contract, fetching only when absent or
 // when --refresh was given.
-func (a *App) contractFromCache(ctx context.Context, opts MaterialsOptions) (contract.Contract, error) {
+func (a *buildApp) contractFromCache(ctx context.Context, opts MaterialsOptions) (contract.Contract, error) {
 	if !opts.Refresh {
 		spec, err := contract.Load(a.Env.ContractPath())
 		if err == nil {
@@ -281,83 +287,6 @@ func (a *App) contractFromCache(ctx context.Context, opts MaterialsOptions) (con
 	}
 	defer session.Close()
 	return spec, nil
-}
-
-// dialOptions is the connection-shaped subset every verb shares.
-type dialOptions struct {
-	Endpoint   string
-	ConfigPath string
-	Insecure   bool
-}
-
-// connection is a dialed session plus how it was reached. `auth status` reports
-// these facts; the build verbs only need the session.
-type connection struct {
-	session  Session
-	endpoint string
-	token    string
-	source   string
-}
-
-// connect resolves the endpoint and credential, refuses an unsafe transport,
-// and dials — classifying every failure on the way.
-//
-// Both the build verbs and `auth status` go through here. They used to repeat
-// these four steps, which is how `auth status` ended up returning an
-// unclassified exit 1 for failures the build path already reported as auth or
-// network.
-func (a *App) connect(ctx context.Context, opts dialOptions) (connection, error) {
-	endpoint, err := a.Env.Endpoint(opts.Endpoint, opts.ConfigPath)
-	if err != nil {
-		// A malformed endpoint came from a flag, an env var, or the settings
-		// file — the caller supplied it either way.
-		return connection{}, fail(ExitUsage, "usage", err)
-	}
-
-	token, source, err := creds.Resolve(a.Store, a.Env)
-	if errors.Is(err, creds.ErrNoCredential) {
-		return connection{}, fail(ExitAuth, "not_authenticated",
-			errors.New("not authenticated — run `codeblox auth login`"))
-	}
-	if err != nil {
-		return connection{}, fail(ExitAuth, "credential_unreadable", err)
-	}
-
-	// The guard runs before the dial so a rejected endpoint never puts the
-	// token on the wire.
-	if err := transport.CheckTransportSecurity(endpoint, opts.Insecure); err != nil {
-		return connection{}, fail(ExitNetwork, "insecure_transport", err)
-	}
-
-	session, err := a.dial(ctx, transport.Dialer{
-		Endpoint: endpoint, Token: token, Insecure: opts.Insecure,
-	})
-	if err != nil {
-		if errors.Is(err, transport.ErrUnauthorized) {
-			return connection{}, fail(ExitAuth, "unauthorized", err)
-		}
-		return connection{}, fail(ExitNetwork, "unreachable", err)
-	}
-	return connection{session: session, endpoint: endpoint, token: token, source: source}, nil
-}
-
-// session authenticates, connects, and returns the live session plus the freshly
-// published contract, which it also caches.
-func (a *App) session(ctx context.Context, opts dialOptions) (Session, contract.Contract, error) {
-	conn, err := a.connect(ctx, opts)
-	if err != nil {
-		return nil, contract.Contract{}, err
-	}
-	session := conn.session
-
-	var spec contract.Contract
-	if err := json.Unmarshal(session.Contract(), &spec); err != nil {
-		session.Close()
-		return nil, contract.Contract{}, fmt.Errorf("parse server contract: %w", err)
-	}
-	// Best-effort: a read-only home must not fail an otherwise good command.
-	_ = spec.Save(a.Env.ContractPath())
-	return session, spec, nil
 }
 
 // batchRejection turns client-side validation failures into one actionable error.
