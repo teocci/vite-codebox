@@ -62,6 +62,21 @@ together via `concurrently`.
 
 ## Notes / follow-ups
 
-WSS/TLS termination is not yet configured — the server currently runs plain `ws` on localhost.
-Deploying to a VPS requires TLS natively or behind a reverse proxy before the Go CLI connects over
-the network.
+### Deferred: WSS/TLS termination (not scheduled)
+
+The plan lists WSS/TLS as part of this phase; it was **not** built. `server/createServer.js`
+creates a plain `ws` server with no TLS context and no reverse-proxy configuration, so the
+transport is unencrypted. The bearer token in the handshake is therefore sent in clear text.
+
+This is acceptable while everything is localhost — the viewer, the server, and the token file all
+sit on one machine. It stops being acceptable the moment the server is network-exposed.
+
+**Blocks:** deploying to a VPS, and any remote use of the Go CLI — including `codeblox auth status`,
+whose live check would otherwise put a credential on the wire unencrypted.
+
+**Scope when picked up:** terminate TLS either natively in `createServer.js` (cert/key paths bound
+by env, per the no-secrets-in-config rule) or behind nginx/Caddy, and switch the client endpoint
+scheme to `wss://`. Decide which before P-3 hard-codes an endpoint default.
+
+Not scheduled into the current plan — fold it into P-3 or cut it as its own phase when the server
+is about to leave localhost.
