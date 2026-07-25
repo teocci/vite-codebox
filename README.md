@@ -44,10 +44,64 @@ npm start        # viewer on :5173 and the world server on :7799
 Open `http://localhost:5173`. `npm run dev` starts the viewer alone, which falls back to applying
 commands locally — useful for engine work, but nothing is shared and nothing persists.
 
-To drive the world from an agent, build the CLI and use the skill:
+To drive the world from an agent, build the CLI:
 
 ```bash
 npm run build:cli                                   # -> clients/codeblox/bin/
+```
+
+### Authenticating the CLI
+
+**The CLI always needs a stored credential — even though the default server does not check it.**
+Those are two independent switches, and conflating them is the first thing that trips a fresh clone:
+
+```bash
+codeblox info
+# {"ok":false,"code":"not_authenticated","exit":3,"detail":"not authenticated — run `codeblox auth login`"}
+```
+
+That failure appears even on a stock checkout, where `config.yaml` ships `ws.auth.required: false`
+and the server accepts *any* token. The client refuses to dial before it has something to send;
+the server is what decides whether the token matters.
+
+The token is generated for you. On first `npm start` the server writes 24 random bytes to
+`.codeblox/token` (mode `0600`, gitignored) unless `CODEBLOX_TOKEN` is set in the environment, which
+wins. So the login step is to hand that file to the CLI:
+
+```bash
+# Git Bash / macOS / Linux
+cat .codeblox/token | codeblox auth login --with-token
+
+# PowerShell
+Get-Content .codeblox\token | codeblox auth login --with-token
+```
+
+Then confirm it against a running server:
+
+```bash
+codeblox auth status
+# connected to ws://127.0.0.1:7799
+# token: 0ca2…fc50   source: keyring   backend: keyring
+# server returned its world_info contract
+# note: a server running with auth disabled accepts any token
+```
+
+That last line is not boilerplate — with `required: false` the connection proves the server is
+reachable, **not** that your token is correct. To make the check meaningful, set
+`ws.auth.required: true` in `config.yaml` and restart; a wrong token is then refused at the
+handshake.
+
+`auth login` with no `--with-token` prompts instead, with echo off. The secret goes to the OS
+keyring, falling back to a `0600` file at `~/.codeblox/auth.json` on hosts with no keyring; it is
+never written to the settings file and is masked everywhere it is printed. `codeblox auth list`
+shows what is stored, `codeblox auth logout` removes it.
+
+If the binary is not on your `PATH`, call it by path (`clients/codeblox/bin/codeblox.exe` on
+Windows) or run `npm run install:cli` to register it on the User `PATH`.
+
+Once `auth status` is green, the skill's preflight should pass:
+
+```bash
 .venv/Scripts/python .claude/skills/codeblox-builder/scripts/doctor.py
 ```
 
