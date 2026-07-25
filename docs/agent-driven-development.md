@@ -285,13 +285,14 @@ and judgment about tradeoffs. That is not a diminished role. It is the part that
 was always the job — the rest was overhead we had accepted because the tools
 demanded it.
 
-And a note on provenance, since it is on-topic: most of this codebase was written
-by an agent, with a human reviewing and pushing back. The framework evaluation
-above happened because the reviewer asked a blunt question — *why are you not
-using the standard library for this?* — and the answer turned out to be
-"reflex, not reasoning." That exchange is the model in miniature. The agent
-covered ground quickly and got the defaults wrong; the human asked the question
-that reframed it. Neither half is optional yet.
+A note on provenance, since it is the point: this codebase was built under
+exactly the model it describes — an agent doing the writing, a human reviewing
+and pushing back. The framework evaluation above exists because the reviewer
+asked a blunt question — *why are you not using the standard library here?* — and
+the honest answer was reflex, not reasoning. That exchange is the whole thing in
+miniature: the agent covered ground fast and inherited a default it could not
+justify; the human asked the question that reframed it. Neither half is optional
+yet.
 
 ---
 
