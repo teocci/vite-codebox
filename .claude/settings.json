@@ -28,7 +28,9 @@
       "Bash(curl -s --max-time 20 \"https://proxy.golang.org/github.com/urfave/cli/v2/@latest\")",
       "Read(//c/Users/teocci/.claude/plans/**)",
       "Bash(echo \"exit:$?\")",
-      "Bash(go test *)"
+      "Bash(go test *)",
+      "Bash(ls -la ~/.codeblox/ 2>&1)",
+      "Read(//c/Users/teocci/.codeblox/**)"
     ]
   }
 }
