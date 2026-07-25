@@ -50,5 +50,13 @@ coverage/
 .temp/
 .tmp/
 
-# Python (virtual env)
+# Python (virtual env + caches; used only to run the dev-phase-* skill scripts)
 .venv/
+__pycache__/
+.pytest_cache/
+
+# Generated config (compiled from config.yaml by scripts/gen-config.mjs)
+shared/config.values.js
+
+# Server auth token (generated at runtime)
+.codeblox/
