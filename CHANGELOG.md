@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-25
+
+codeblox Go CLI: credentials, config, and authenticated transport
+
+### Added
+
+- P-3: `codeblox` Go CLI at `clients/codeblox/` — a self-contained operator binary that needs
+  neither Node nor Python on the host.
+- P-3: gh-style credential lifecycle — `auth login` (no-echo prompt, or `--with-token` from stdin),
+  `auth logout`, `auth list`, and `auth status` with a live check against the server.
+- P-3: OS keyring as the default token store, with an automatic fallback to a `0600` file store at
+  `~/.codeblox/auth.json` on hosts with no keyring. Selectable via `--backend` or
+  `CODEBLOX_AUTH_BACKEND`.
+- P-3: Endpoint resolution — `--endpoint`, then `CODEBLOX_ENDPOINT`, then `~/.codeblox/config.json`,
+  then `ws://127.0.0.1:7799`. The settings file holds non-secret values only; the token is never
+  written to it and is masked everywhere it is printed.
+- P-3: A transport guard that refuses to send the token over plain `ws://` to any non-loopback host
+  unless `--insecure` is given, checked before the connection is opened.
+- P-3: `--json` on `auth list` and `auth status` for compact machine-readable output, since an agent
+  is the primary caller.
+
 ## [0.2.0] - 2026-07-25
 
 Baseline release. Establishes codeblox end to end for a local operator: a block engine and viewer

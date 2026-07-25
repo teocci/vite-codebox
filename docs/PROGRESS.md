@@ -1,8 +1,8 @@
 # Progress
 
-**Current version:** 0.2.0
-**Active phase:** none — v0.2.0 released (baseline: Phases 1–2, engine + viewer + authoritative
-server, 44 vitest tests). Next work is the Go CLI + agent skill.
+**Current version:** 0.3.0
+**Active phase:** none — v0.3.0 released (P-3, the `codeblox` Go CLI foundation; 97 tests: 44
+vitest + 53 Go). P-4 is unblocked and ready to start.
 
 Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active plan: `docs/PLAN.md`.
 
@@ -10,11 +10,37 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 |-------|-------|--------|
 | 1 | Engine + viewer, driven locally | done |
 | 2 | Authoritative WS server + transport security | done |
+| 3 | codeblox CLI foundation — config, credentials, transport | done |
+| 4 | Schema-driven build verbs — info, exec, and the ergonomic forms | planned |
+| 5 | codeblox-builder agent skill | planned |
 
 ## Next action
 
-Scaffold and implement the Phase 3 work (Go CLI `clients/codeblox/` + `skills/codeblox-builder/`),
-split into context-sized phases per conventions §2.
+Implement **P-4** — the schema-driven build verbs on the CLI: `info` (fetch and cache `world_info`),
+client-side validation against the fetched palette, `exec -` reading a batch from stdin, `materials`,
+the ergonomic `box`/`sphere`/`cylinder` forms, `remove`, and `clear`. Ready now; P-5 waits on it.
+
+Open follow-up from Phase 2, not yet scheduled: the server still runs plain `ws`. WSS/TLS —
+native or behind a reverse proxy — is required before the CLI connects to a VPS over the network.
+P-3 already refuses to send the token over plain `ws://` to a remote host, so that gap now blocks
+remote use loudly rather than silently.
+
+> Phase 3 (done): Built `clients/codeblox/`, the operator-PC Go binary. `internal/config` injects
+> the host environment (home, cwd, getenv) so every path is testable and nothing resolves relative
+> to the executable; it declares every filename and `CODEBLOX_*` variable, and resolves the endpoint
+> `--endpoint` → env → `~/.codeblox/config.json` → `ws://127.0.0.1:7799`. `internal/creds` keeps the
+> token in the OS keyring via `go-keyring`, falling back automatically to a `0600`
+> `~/.codeblox/auth.json` when no keyring answers; the stored credential beats `$CODEBLOX_TOKEN`,
+> and `Mask` blanks tokens under 12 characters entirely instead of leaking most of a short secret.
+> `internal/transport` performs the `hello`/`welcome` handshake, keeps `contract` and `parts` as raw
+> JSON so the CLI stays schema-driven, and translates a 4001 close into an actionable
+> "unauthorized". `CheckTransportSecurity` runs before the dial and refuses plain `ws://` to a
+> non-loopback host without `--insecure`. `internal/command` ships `auth login|logout|list|status`
+> with `--json` on the read verbs. Verified live against a server with `authRequired: true`: the
+> wrong token is rejected, the right one connects and returns the contract. Deviated from the plan
+> on three points, each recorded in `docs/phases/phase-3.md`: the env prefix is `CODEBLOX_` (the
+> plan's `CODEBOX_` contradicts `server/auth.js`), profiles stay deferred, and `login` does not
+> verify — `status` is the live check.
 
 > Phase 2 (done): Made the server authoritative. `server/createServer.js` accepts `ws`
 > connections behind a bearer-token handshake (`server/auth.js`, token generated to

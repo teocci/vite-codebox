@@ -5,4 +5,5 @@ Terse internal index of cut releases, newest first. The detailed public notes li
 
 | Release | Date | Phases | Theme |
 |---------|------|--------|-------|
+| v0.3.0 | 2026-07-25 | 3 | codeblox Go CLI: credentials, config, authenticated transport |
 | v0.2.0 | 2026-07-25 | 1, 2 | Baseline: block engine, viewer, and authoritative WS server |
