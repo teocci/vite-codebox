@@ -3,8 +3,8 @@ import { makeGeometries } from './geometry.js'
 import { makeFamilyMaterial } from './materials.js'
 import InstancedLayer from './InstancedLayer.js'
 import DropAnimator from './DropAnimator.js'
-import { BLOCK_SIZE } from '../../shared/config.js'
-import { materialColor, materialFamily } from '../../shared/materials.js'
+import { BLOCK_SIZE } from '@codeblox/shared/config.js'
+import { materialColor, materialFamily } from '@codeblox/shared/materials.js'
 
 const IDENTITY_QUAT = new Quaternion()
 

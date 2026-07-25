@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws'
-import { contract } from '../shared/protocol.js'
-import { tree } from '../shared/examples.js'
+import { contract } from '@codeblox/shared/protocol.js'
+import { tree } from '@codeblox/shared/examples.js'
 import WorldStore from './WorldStore.js'
 import { applyBatch } from './commands.js'
 import { createAuth } from './auth.js'

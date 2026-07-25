@@ -1,4 +1,4 @@
-import { WS } from '../../shared/config.js'
+import { WS } from '@codeblox/shared/config.js'
 
 const BACKOFF_START = 500
 const BACKOFF_MAX = 8000

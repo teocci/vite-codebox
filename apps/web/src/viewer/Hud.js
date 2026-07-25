@@ -1,6 +1,6 @@
 import styles from './Hud.module.css'
-import { blockLabel, metres } from '../../shared/config.js'
-import { MATERIAL_NAMES } from '../../shared/materials.js'
+import { blockLabel, metres } from '@codeblox/shared/config.js'
+import { MATERIAL_NAMES } from '@codeblox/shared/materials.js'
 
 const fmt = n => {
   const r = Math.round(n * 10) / 10

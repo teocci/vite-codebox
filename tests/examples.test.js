@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { tree } from '../shared/examples.js'
-import { validate } from '../shared/protocol.js'
+import { tree } from '@codeblox/shared/examples.js'
+import { validate } from '@codeblox/shared/protocol.js'
 
 describe('examples', () => {
   it('tree() produces only valid, in-bounds commands', () => {

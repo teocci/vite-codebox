@@ -56,7 +56,10 @@ __pycache__/
 .pytest_cache/
 
 # Generated config (compiled from config.yaml by scripts/gen-config.mjs)
-shared/config.values.js
+packages/shared/config.values.js
+
+# Go CLI build output (never Vite's dist/)
+clients/codeblox/bin/
 
 # Server auth token (generated at runtime)
 .codeblox/

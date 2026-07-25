@@ -48,16 +48,37 @@ npm run preview
 
 ## Project Structure
 
+An npm-workspaces monorepo. The two servers are siblings — neither is nested inside the other.
+
 ```
 vite-codebox/
-├── src/
-│   ├── components/   # Reusable UI components (.js + .module.css)
-│   ├── services/     # Shared services (api, i18n)
-│   ├── styles/       # Global CSS and design tokens
-│   └── main.js       # Application entry point
-├── index.html
-└── vite.config.js
+├── apps/
+│   ├── web/                  # Viewer (browser). Vite's root.
+│   │   ├── index.html
+│   │   └── src/
+│   │       ├── engine/       # InstancedLayer, World, DropAnimator, geometry
+│   │       ├── viewer/       # Viewer, CameraDirector, Grid, Hud
+│   │       ├── net/          # WsClient
+│   │       ├── styles/
+│   │       └── main.js
+│   └── server/               # Authoritative WebSocket server (Node)
+├── packages/
+│   └── shared/               # @codeblox/shared — dependency-free source of truth
+│                             # config, materials, families, protocol
+├── clients/
+│   └── codeblox/             # Go CLI (the agent's hands); builds to bin/
+├── scripts/gen-config.mjs    # config.yaml -> packages/shared/config.values.js
+├── tests/                    # vitest, covering apps/ and packages/
+├── config.yaml               # the one place to change block size, world, ports
+└── vite.config.js            # root: apps/web, build.outDir: ../../dist
 ```
+
+Shared code is imported by workspace package name — `@codeblox/shared/protocol.js` — which
+resolves identically under Vite, Node, and vitest. No aliases, and no `../../../` chains
+crossing an app boundary.
+
+`dist/` holds the browser build only. The Go CLI builds to `clients/codeblox/bin/`
+(`npm run build:cli`); both are gitignored.
 
 ## License
 

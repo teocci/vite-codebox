@@ -1,5 +1,5 @@
 import { MeshStandardMaterial, MeshBasicMaterial } from 'three'
-import { FAMILY } from '../../shared/families.js'
+import { FAMILY } from '@codeblox/shared/families.js'
 
 /**
  * Build the one THREE material for a render family. Per-instance color comes from

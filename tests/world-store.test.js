@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import WorldStore from '../server/WorldStore.js'
-import { applyBatch } from '../server/commands.js'
-import { expand } from '../shared/protocol.js'
+import WorldStore from '../apps/server/WorldStore.js'
+import { applyBatch } from '../apps/server/commands.js'
+import { expand } from '@codeblox/shared/protocol.js'
 
 const boxPart = expand({ op: 'box', at: [0, 0, 0], size: [4, 4, 4], mat: 'oak' })[0]
 

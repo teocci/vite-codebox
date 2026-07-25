@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { WebSocket } from 'ws'
-import { createServer } from '../server/createServer.js'
+import { createServer } from '../apps/server/createServer.js'
 
 const servers = []
 

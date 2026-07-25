@@ -1,0 +1,11 @@
+{
+  "name": "@codeblox/web",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "codeblox viewer — Three.js engine and viewer, driven by the ws server",
+  "dependencies": {
+    "@codeblox/shared": "*",
+    "three": "^0.185.1"
+  }
+}

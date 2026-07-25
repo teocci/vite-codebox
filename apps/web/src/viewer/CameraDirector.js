@@ -1,6 +1,6 @@
 import { Vector3, MathUtils } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { BLOCK_SIZE } from '../../shared/config.js'
+import { BLOCK_SIZE } from '@codeblox/shared/config.js'
 
 const PADDING = 1.3
 const MIN_RADIUS_METRES = 1.0 // frame an empty/tiny world to something sensible

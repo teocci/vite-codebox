@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { Matrix4 } from 'three'
-import World from '../src/engine/World.js'
-import { expand } from '../shared/protocol.js'
+import World from '../apps/web/src/engine/World.js'
+import { expand } from '@codeblox/shared/protocol.js'
 
 // A manual clock so drop animations are deterministic in tests.
 let t = 0

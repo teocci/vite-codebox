@@ -1,5 +1,5 @@
 import { createServer } from './createServer.js'
-import { WS } from '../shared/config.js'
+import { WS } from '@codeblox/shared/config.js'
 
 const srv = createServer({
   host: WS.host,

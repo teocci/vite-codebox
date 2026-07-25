@@ -50,15 +50,23 @@ $env:PATH = "C:\Users\teocci\AppData\Roaming\fnm\node-versions\v24.13.1\installa
 The product is JS. The repo `.venv/` exists solely to run the `dev-phase-*` skill scripts
 (stdlib-only — no `requirements.txt`, nothing to install). It is gitignored.
 
-### Skill location deviates from the documented path
-The family lives at `.claude/dev-phase/<skill>/scripts/`, not `.claude/skills/<skill>/scripts/`
-as the SKILL.md bodies show. The `tracklib` import bootstrap (`parents[2]`) and
-`tests/conftest.py` (`parents[1]`) both resolve correctly at this nesting, so run the scripts by
-their real path:
+### Skill location
+The family lives under a group directory at `.claude/skills/dev-phase/<skill>/scripts/`, not
+`.claude/skills/<skill>/scripts/` as the SKILL.md bodies show. The `tracklib` import bootstrap
+(`parents[2]`) and `tests/conftest.py` (`parents[1]`) both resolve correctly at this nesting, so run
+the scripts by their real path:
 
 ```bash
-.venv/Scripts/python .claude/dev-phase/dev-phase-status/scripts/status.py
+.venv/Scripts/python .claude/skills/dev-phase/dev-phase-status/scripts/status.py
+.venv/Scripts/python -m pytest .claude/skills/dev-phase/tests -q
 ```
+
+### Repository layout (npm workspaces)
+`apps/web` (viewer, Vite's root) and `apps/server` (ws server) are **siblings** — neither app is
+nested inside the other, and neither owns a top-level `src/`. Shared code lives in
+`packages/shared` and is imported by package name (`@codeblox/shared/*`), never by a relative path
+crossing an app boundary. `clients/codeblox` is the Go CLI and builds to `clients/codeblox/bin/`;
+`dist/` is the browser build only and must never receive a CLI binary.
 
 ### `integration = trunk`
 Single operator, agent-driven. Commits and release tags land directly on `main`; the base's

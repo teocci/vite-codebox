@@ -1,0 +1,10 @@
+{
+  "name": "@codeblox/shared",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free source of truth: config, materials, render families, command protocol",
+  "exports": {
+    "./*": "./*"
+  }
+}

@@ -2,8 +2,8 @@ import './styles/variables.css'
 import './styles/global.css'
 import Viewer from './viewer/Viewer.js'
 import WsClient from './net/WsClient.js'
-import { validate, expand, contract, isPartOp } from '../shared/protocol.js'
-import { tree } from '../shared/examples.js'
+import { validate, expand, contract, isPartOp } from '@codeblox/shared/protocol.js'
+import { tree } from '@codeblox/shared/examples.js'
 
 const viewer = new Viewer(document.getElementById('app')).start()
 

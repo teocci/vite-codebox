@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BoxGeometry, MeshBasicMaterial, Matrix4, Color } from 'three'
-import InstancedLayer from '../src/engine/InstancedLayer.js'
+import InstancedLayer from '../apps/web/src/engine/InstancedLayer.js'
 
 // InstancedMesh writes to typed arrays without a GL context, so this runs headless.
 const geo = new BoxGeometry(1, 1, 1)

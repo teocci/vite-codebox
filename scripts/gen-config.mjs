@@ -1,8 +1,9 @@
 /**
- * Compile config.yaml into shared/config.values.js — a plain ESM module that both
- * the browser viewer (via Vite) and the Node server import identically. This is
- * how file-based YAML config reaches the browser, which cannot read files at
- * runtime, without any environment variables.
+ * Compile config.yaml into packages/shared/config.values.js — a plain ESM module
+ * that both the browser viewer (via Vite) and the Node server import identically
+ * as @codeblox/shared/config.values.js. This is how file-based YAML config reaches
+ * the browser, which cannot read files at runtime, without any environment
+ * variables.
  *
  * Run automatically via the install / predev / prebuild / pretest npm hooks.
  */
@@ -13,7 +14,7 @@ import { load } from 'js-yaml'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const yamlPath = join(root, 'config.yaml')
-const outPath = join(root, 'shared', 'config.values.js')
+const outPath = join(root, 'packages', 'shared', 'config.values.js')
 
 const raw = existsSync(yamlPath) ? (load(readFileSync(yamlPath, 'utf8')) ?? {}) : {}
 
@@ -36,4 +37,4 @@ const values = {
 const banner = '// AUTO-GENERATED from config.yaml by scripts/gen-config.mjs — do not edit by hand.\n'
 writeFileSync(outPath, banner + 'export default ' + JSON.stringify(values, null, 2) + '\n')
 
-console.log('[codeblox] config.yaml -> shared/config.values.js', values)
+console.log('[codeblox] config.yaml -> packages/shared/config.values.js', values)

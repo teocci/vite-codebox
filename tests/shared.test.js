@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK_SIZE, metres, blockLabel, WORLD } from '../shared/config.js'
+import { BLOCK_SIZE, metres, blockLabel, WORLD } from '@codeblox/shared/config.js'
 import {
   MATERIALS, MATERIAL_NAMES, MATERIAL_FAMILIES, isMaterial, materialColor, materialFamily,
-} from '../shared/materials.js'
-import { FAMILY, isFamily } from '../shared/families.js'
-import { validate, expand, contract, isPartOp } from '../shared/protocol.js'
+} from '@codeblox/shared/materials.js'
+import { FAMILY, isFamily } from '@codeblox/shared/families.js'
+import { validate, expand, contract, isPartOp } from '@codeblox/shared/protocol.js'
 
 describe('config', () => {
   it('uses a 2 cm block by default', () => {

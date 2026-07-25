@@ -1,4 +1,4 @@
-import { validate, expand, isPartOp } from '../shared/protocol.js'
+import { validate, expand, isPartOp } from '@codeblox/shared/protocol.js'
 
 /**
  * Apply a command batch to the authoritative store, producing the normalized diff

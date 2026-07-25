@@ -4,21 +4,26 @@
   "version": "0.4.0",
   "type": "module",
   "description": "Agent-driven, block-based build engine on Three.js",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "gen:config": "node scripts/gen-config.mjs",
     "postinstall": "node scripts/gen-config.mjs",
     "predev": "npm run gen:config",
     "dev": "vite",
     "preserve": "npm run gen:config",
-    "serve": "node server/index.js",
+    "serve": "node apps/server/index.js",
     "prestart": "npm run gen:config",
-    "start": "concurrently -k -n server,web -c green,cyan \"node server/index.js\" \"vite\"",
+    "start": "concurrently -k -n server,web -c green,cyan \"node apps/server/index.js\" \"vite\"",
     "prebuild": "npm run gen:config",
     "build": "vite build",
     "preview": "vite preview",
     "pretest": "npm run gen:config",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:cli": "cd clients/codeblox && go build -o bin/codeblox ."
   },
   "dependencies": {
     "three": "^0.185.1",

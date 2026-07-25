@@ -7,7 +7,7 @@ import Grid from './Grid.js'
 import Hud from './Hud.js'
 import CameraDirector from './CameraDirector.js'
 import { bindControls } from './controls.js'
-import { WORLD } from '../../shared/config.js'
+import { WORLD } from '@codeblox/shared/config.js'
 
 const MAX_DT = 0.05 // clamp frame delta so a tab-switch doesn't fling the camera
 const FALLBACK_BG = '#dde1e7'
