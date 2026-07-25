@@ -1,13 +1,24 @@
-# vite-codebox
+# codeblox
 
-A Vite-powered vanilla JavaScript sandbox — a lightweight starting point for building modular, framework-free web components with modern tooling.
+A block-building engine on Three.js whose primary operator is an **AI agent**. The agent builds; the
+human reviews.
+
+A browser viewer renders the world, an authoritative WebSocket server owns it, and a Go CLI is the
+agent's hands. The client compiles in no list of commands and no list of materials — both are
+published by the server at runtime, so a new material needs no client release.
+
+> **Why this repo is interesting beyond the blocks:** taking "the operator is a model, not a person"
+> seriously changes what a good interface is. Silent success becomes the worst failure mode, exit
+> codes become an API, and the reflexive best practice turns out to be wrong. The story of what
+> broke and why is in **[The bug that only an agent could hit](docs/agent-driven-development.md)**.
 
 ## Features
 
-- Vite dev server with instant HMR and optimized production builds
+- Agent-operated: a documented CLI contract — structured errors, meaningful exit codes, and a
+  runtime-published capability schema — designed for a caller that cannot read prose
+- O(1) part add/remove via `InstancedMesh` swap-remove, one draw call per geometry × render family
 - Vanilla ES6+ JavaScript — no frameworks, no black boxes
-- CSS Modules with CSS custom properties for design tokens
-- Component-based structure with clear separation of concerns
+- One dial for scale: `config.yaml` compiles to shared config; no literal metre appears anywhere else
 
 ## Getting Started
 
@@ -27,10 +38,18 @@ npm install
 ### Development
 
 ```bash
-npm run dev
+npm start        # viewer on :5173 and the world server on :7799
 ```
 
-Open the URL printed in the terminal (default `http://localhost:5173`).
+Open `http://localhost:5173`. `npm run dev` starts the viewer alone, which falls back to applying
+commands locally — useful for engine work, but nothing is shared and nothing persists.
+
+To drive the world from an agent, build the CLI and use the skill:
+
+```bash
+npm run build:cli                                   # -> clients/codeblox/bin/
+.venv/Scripts/python .claude/skills/codeblox-builder/scripts/doctor.py
+```
 
 ### Build
 
