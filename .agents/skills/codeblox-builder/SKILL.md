@@ -1,14 +1,11 @@
 ---
 name: codeblox-builder
-description: Build structures in a codeblox world from a prompt — resolve the CLI, discover the live contract, generate exact block coordinates, and submit a validated batch. Use when asked to build, place, or remove anything in codeblox, or to inspect the world's materials, ops, or bounds.
+description: Use when asked to build, place, rebuild, or remove anything in a codeblox world — a structure, a scene, a single shape — or to inspect the world's materials, ops, or bounds.
 ---
 
 # codeblox-builder
 
-You design; the scripts compute. Everything mechanical — finding the binary,
-reading the contract, coordinate arithmetic, bounds checking, submitting — is a
-script under `scripts/`. What is left for you is the part a script cannot do:
-deciding **what to build** and **what it should look like**.
+You design; the scripts compute. Everything mechanical — finding the binary, reading the contract, coordinate arithmetic, bounds checking, ordering, pacing, submitting — is a script under `scripts/`. What is left for you is the part a script cannot do: deciding **what to build**, **what it should look like**, and **in what order it should land**.
 
 Do not re-derive any of the below by hand. If you find yourself computing block
 positions in your head, stop and use `shapes.py`.
@@ -26,15 +23,20 @@ Never write a path to the `codeblox` binary anywhere. `resolve_codeblox.py`
 finds it — an explicit `--bin`, then `$CODEBLOX_BIN`, then `$PATH`, then a repo
 checkout — and every other script calls it for you.
 
-## The pipeline
+## The workflow
 
 ```
-doctor.py            is everything working?        run once, first
-world.py             what can I build with?        materials, ops, bounds
-   ↓ you decide what to build
-shapes.py <gen>      exact coordinates             NDJSON on stdout
-   | submit.py       gate, validate, send          addedIds on success
+doctor.py            is everything working?         run once, first
+world.py             what can I build with?         materials, ops, bounds
+   ↓ you decide what to build, and in what order it lands
+plan.json            stages, big to small           you write this
+   | build.py        validate all, land beat by beat  progress per stage
+
+shapes.py <gen>      one shape's coordinates        NDJSON on stdout
+   | submit.py       gate, validate, send           addedIds on success
 ```
+
+`build.py` is how you build a structure. `shapes.py | submit.py` is the quick path for a single shape you just want to drop in.
 
 ### 1. Preflight
 
@@ -66,7 +68,68 @@ Materials are grouped by render family — `opaque`, `glass`, `metal`, `emissive
 The family is usually what you actually want ("something glassy"); pick a
 specific name from it.
 
-### 3. Generate
+### 3. Plan the stages
+
+**Build order is not bookkeeping — it is what the audience watches.** The viewer drops every newly added part in from six blocks up, staggered a few milliseconds apart, and a part that has settled never moves again. So each batch you submit is *one animation beat*. A structure sent as one flat batch lands as one undifferentiated shower; the same structure sent as five stages reads as something being built.
+
+Work bottom-up, big to small:
+
+| # | Stage | What lands |
+|---|---|---|
+| 1 | **Ground** | `world.py` to see the world, then a `clear` if you are replacing what is there |
+| 2 | **Mass** | the big forms — the silhouette, in as few large parts as possible |
+| 3 | **Structure** | towers, limbs, spans — what grows out of the mass |
+| 4 | **Openings** | doors, windows, arches |
+| 5 | **Detail** | finials, eyes, teeth, accents in a contrasting family |
+
+**Openings are composed, not carved.** There is no boolean subtraction in this engine — geometry is scaled parts, and `remove` deletes a part *by id*, not a region. You cannot punch a hole in a wall. Build the wall as parts arranged *around* the gap instead, which is what `shell` already does internally. If you find yourself wanting to subtract, you placed the mass too coarsely one stage earlier.
+
+A plan is one JSON object, and it is worth keeping — the whole build is reproducible from it, and re-running one stage beats rebuilding from scratch. Write it to `builds/<name>.json` rather than leaving it loose in the project root. That directory is the working space for plans and is not tracked, so treat it as yours to fill. Each part is either a **shape call** (expanded through the generators below) or a **raw command** passed through untouched:
+
+```json
+{
+  "name": "castle",
+  "stages": [
+    { "name": "ground", "parts": [ {"op": "clear"} ] },
+    { "name": "mass",   "parts": [
+        {"shape": "shell", "at": [-20,0,-20], "size": [40,14,40], "mat": "brick", "thickness": 2} ] },
+    { "name": "towers", "parts": [
+        {"shape": "shell", "at": [-22,0,-22], "size": [6,22,6], "mat": "granite"},
+        {"shape": "shell", "at": [16,0,-22],  "size": [6,22,6], "mat": "granite"} ] },
+    { "name": "gate",   "parts": [
+        {"shape": "arch", "at": [-5,0,-20], "span": 10, "rise": 6, "mat": "marble"} ] },
+    { "name": "detail", "parts": [
+        {"op": "box", "at": [-22,22,-22], "size": [6,1,6], "mat": "copper"} ] }
+  ]
+}
+```
+
+Shape keys are the generator's own parameters — the same names as the flags, with `-` or `_` both accepted. Get one wrong and `build.py` tells you which keys that generator does accept.
+
+### 4. Build
+
+```bash
+build.py --dry-run < builds/castle.json    # validate every stage, send nothing
+build.py < builds/castle.json              # land it, stage by stage
+```
+
+```
+stage 1/5  ground      1 cmd    world cleared    350ms
+stage 2/5  mass        6 parts  ids 1..6         440ms
+stage 3/5  towers     12 parts  ids 7..18        548ms
+```
+
+**Every stage is bounds-checked and validated by the CLI before the first block is sent.** That is the reason to use a plan rather than five separate submissions: a misspelled material in the last stage would otherwise surface only after the first four had landed, and there is no partial undo — `remove` needs ids, so the only recovery is `clear` and start over.
+
+Pacing defaults to the real settle time, so each stage finishes falling before the next begins. `--pace none` builds as fast as the server accepts; `--pace 800` holds a fixed beat.
+
+`build.py` also marks the build so the viewer can tell your new parts from whatever was already in the world, and points its camera at yours — even if the reviewer had grabbed the camera to inspect something else. Without that mark the viewer would frame *everything ever built*, which with two structures far apart is two specks. Pass `--no-focus` when you deliberately want the camera left alone.
+
+If a stage does fail part-way, the error names what already landed and its ids, and you resume with `--from N` once the plan is fixed. `--only NAME` re-sends a single stage — useful when iterating on the detail pass against an otherwise-finished build.
+
+### 5. The generators
+
+The four shape generators are usable from a plan (as `"shape": "..."`) or straight from the command line:
 
 ```bash
 shapes.py bridge  --at 0,0,0 --span 40 --width 6 --deck-height 8 \
@@ -79,24 +142,14 @@ shapes.py arch    --at 0,0,0 --span 16 --rise 6 --mat marble
 Each writes NDJSON to stdout. Negative coordinates work bare (`--at -20,0,-3`);
 no `=` needed.
 
-For anything the generators do not cover, write the commands yourself as NDJSON
-and pipe them to `submit.py` — you are not restricted to these four shapes.
-
-### 4. Submit
+For anything the generators do not cover, write the commands yourself — as raw `{"op": ...}` entries in a plan, or as NDJSON piped to `submit.py`. You are not restricted to these four shapes.
 
 ```bash
 shapes.py bridge --span 40 --mat oak | submit.py
 shapes.py bridge --span 40 --mat oak | submit.py --dry-run   # validate only
 ```
 
-Reports `addedIds` on success. On failure the exit code tells you what kind:
-`5` means it was rejected before anything was sent (fix and retry safely),
-`6` means the server refused it.
-
-`submit.py --dry-run` is a full check: it gates bounds itself, then asks the CLI
-to validate types and materials. Note that `codeblox exec --dry-run` on its own
-is **not** — the published schema types fields and says nothing about geometry,
-so bounds are only evaluated once a batch is actually sent. Use `submit.py`.
+`submit.py` sends one batch and reports `addedIds`. It gates bounds itself, then asks the CLI to validate types and materials. Note that `codeblox exec --dry-run` on its own is **not** a full check — the published schema types fields and says nothing about geometry, so bounds are only evaluated once a batch is actually sent. Use `submit.py`, or `build.py` for anything with more than one stage.
 
 ## Coordinates
 
@@ -120,7 +173,7 @@ That last row is the easy mistake: a `box` at y=10 sits *on* y=10, but a
 
 **Prefer few large parts.** One `box` of 40×1×6 is one object in the engine; forty
 1×1×6 boxes are forty. Both look the same and one is 40× the cost. Reach for a
-larger part before a loop.
+larger part before a loop. This is per *stage*, not per build: few large parts each, several stages.
 
 **Choose materials by family, then by name.** Structure reads better when the
 family carries meaning — `metal` for supports, `glass` where light should pass,
@@ -132,9 +185,7 @@ span reads right; the same deck at 40 blocks reads as a tower. When the prompt
 does not specify, pick proportions that make the thing recognisable, and say what
 you picked.
 
-**Compose.** A castle is `shell` walls, `stairs` to the rampart, and `arch` for
-the gate. Build the pieces, submit them as separate batches, and check the viewer
-between them.
+**Compose, and order the composition.** A castle is `shell` walls, `stairs` to the rampart, and `arch` for the gate — but *which lands first* is a design decision as much as the materials are. Write the pieces into a plan as stages, largest first, and let `build.py` land them in that order.
 
 ## Guardrails
 
@@ -145,6 +196,11 @@ between them.
 - **Bounds are enforced by the server, not the schema.** The published contract
   types fields; it does not describe geometry. So a shape can be perfectly valid
   and still be refused for where it is (exit 6).
+- **There is no carving.** `remove` takes an id, not a region, and parts are not
+  voxels — nothing subtracts. Make openings by composing parts around the gap.
+- **There is no partial undo.** Because `remove` needs ids, a build that stops
+  half-way can only be unwound with `clear`. This is why `build.py` validates
+  every stage before sending the first one — let it.
 - **`clear` removes everything.** Confirm before using it on a world you did not
   just build.
 
@@ -158,3 +214,5 @@ prose.
 
 If a script's own output is confusing, run it with `--json` and read the
 structured form before guessing.
+
+A `build.py` failure is either *before* anything was sent — the usual case, since the whole plan is gated up front — or part-way through, in which case the message says which stages landed and their ids. Read that line before deciding what to do: it is the difference between "fix the plan and re-run" and "the world is half-built, resume with `--from N`".

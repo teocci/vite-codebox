@@ -21,6 +21,12 @@ const VIEWS = {
  * Owns the camera. In AGENT mode an auto-framer eases the camera to fit the build
  * at the current angle; the instant the human touches the canvas it flips to USER
  * mode and the framer stands down, so it never fights the reviewer's zoom.
+ *
+ * The framer fits `focusBounds` when one is set and the whole world otherwise.
+ * A focus is what makes "frame the new building" different from "frame
+ * everything": with two builds far apart, fitting the world shows two specks.
+ * The caller supplies a finished sphere, not a set of ids, so the framing math
+ * runs once per landed stage rather than once per frame.
  */
 export default class CameraDirector {
   constructor(camera, domElement, world) {
@@ -28,6 +34,7 @@ export default class CameraDirector {
     this.world = world
     this.mode = 'agent'
     this.view = 'auto'
+    this.focusBounds = null
     this.controls = new OrbitControls(camera, domElement)
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.09
@@ -56,6 +63,11 @@ export default class CameraDirector {
     this.view = 'auto'
   }
 
+  /** Frame this sphere instead of the world. `null` restores whole-world framing. */
+  focusOn(bounds) {
+    this.focusBounds = bounds?.radius ? bounds : null
+  }
+
   get autoRotate() {
     return this.controls.autoRotate
   }
@@ -68,15 +80,15 @@ export default class CameraDirector {
     return (radiusMetres * PADDING) / Math.sin(half)
   }
 
-  _worldBounds() {
-    const b = this.world.getBounds()
+  _framedBounds() {
+    const b = this.focusBounds ?? this.world.getBounds()
     this._center.set(b.center[0], b.center[1], b.center[2]).multiplyScalar(BLOCK_SIZE)
     return Math.max(b.radius * BLOCK_SIZE, MIN_RADIUS_METRES)
   }
 
   tick(dt) {
     if (this.mode === 'agent') {
-      const radius = this._worldBounds()
+      const radius = this._framedBounds()
       const distance = this._fitDistance(radius)
       // preserve the current viewing angle
       this._dir.copy(this.camera.position).sub(this.controls.target)
@@ -90,8 +102,13 @@ export default class CameraDirector {
     this.controls.update()
   }
 
-  /** F: refit at the current angle and let the agent-framer keep following. */
+  /**
+   * F: drop any focus and refit the whole world at the current angle, then let
+   * the agent-framer keep following. "Show me everything" is the complement to
+   * the build-scoped framing, and the only way back out to it.
+   */
   reframe() {
+    this.focusOn(null)
     this.engageAgent()
   }
 
@@ -111,7 +128,9 @@ export default class CameraDirector {
     if (!preset) return null
     const [azDeg, elDeg, name] = preset
     if (this.mode === 'user' && this.view === name) return null // already there
-    const radius = this._worldBounds()
+    // Honours the focus: a canned angle reviews whatever is currently framed,
+    // which right after a build is that build.
+    const radius = this._framedBounds()
     const distance = this._fitDistance(radius)
     const az = MathUtils.degToRad(azDeg)
     const el = MathUtils.degToRad(elDeg)

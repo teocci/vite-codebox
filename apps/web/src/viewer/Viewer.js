@@ -57,7 +57,30 @@ export default class Viewer {
 
     this.cameraDirector = new CameraDirector(this.camera, this.renderer.domElement, this.world)
 
+    // The focus group: ids of the build currently landing, or null for "no build
+    // in progress — frame the world". A build arrives as several batches over
+    // several seconds, so the group is what turns that stream back into one
+    // subject the camera can follow.
+    this._focusIds = null
+
+    this.world.onBuildBegin = () => {
+      this._focusIds = new Set()
+      this.cameraDirector.focusOn(null) // nothing landed yet
+      this.cameraDirector.engageAgent()
+      this.hud.toast('building')
+    }
+
+    this.world.onAdded = ids => {
+      if (!this._focusIds) return
+      for (const id of ids) this._focusIds.add(id)
+      this.cameraDirector.focusOn(this.world.boundsOf(this._focusIds))
+    }
+
     this.world.onClear = () => {
+      // After a clear the build is all there is, so world framing already IS
+      // build framing — holding a focus would only make it go stale.
+      this._focusIds = null
+      this.cameraDirector.focusOn(null)
       this.cameraDirector.engageAgent()
       this.hud.toast('cleared')
     }
@@ -96,6 +119,7 @@ export default class Viewer {
   // --- control surface (keyboard + driver) ---------------------------------
 
   reframe() {
+    this._focusIds = null
     this.cameraDirector.reframe()
     this.hud.toast('reframed')
   }

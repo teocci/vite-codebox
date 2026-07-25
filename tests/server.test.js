@@ -65,6 +65,41 @@ describe('ws server', () => {
     expect(srv.store.size).toBe(1)
   })
 
+  it('relays build_begin to every client without touching the store', async () => {
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const b = await connect(srv.port())
+    const aDiff = a.nextDiff()
+    const bDiff = b.nextDiff()
+    a.send([{ op: 'build_begin' }])
+    const [da, db] = await Promise.all([aDiff, bDiff])
+
+    // A pure signal: every viewer must see it (the reviewer's tab is often not
+    // the one that sent the batch), and nothing may be built by it.
+    expect(da.buildBegin).toBe(true)
+    expect(db.buildBegin).toBe(true)
+    expect(da.added).toHaveLength(0)
+    expect(srv.store.size).toBe(0)
+  })
+
+  it('carries build_begin alongside the parts of the same batch', async () => {
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const diff = a.nextDiff()
+    a.send([{ op: 'build_begin' }, { op: 'box', at: [0, 0, 0], size: [2, 2, 2], mat: 'oak' }])
+    const d = await diff
+    expect(d.buildBegin).toBe(true)
+    expect(d.added).toHaveLength(1)
+  })
+
+  it('leaves buildBegin false on an ordinary batch', async () => {
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const ackP = a.nextAck()
+    a.send([{ op: 'box', at: [0, 0, 0], size: [2, 2, 2], mat: 'oak' }])
+    expect((await ackP).buildBegin).toBe(false)
+  })
+
   it('rejects an unauthenticated connection when auth is required', async () => {
     const srv = await startServer({ authRequired: true, token: 'sekret' })
     await expect(connect(srv.port())).rejects.toThrow(/closed before welcome/)

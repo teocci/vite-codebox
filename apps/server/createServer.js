@@ -15,8 +15,8 @@ const OPEN = 1 // ws.readyState
  *   client -> { type:'hello', token? }         (first message; gates the connection)
  *   server -> { type:'welcome', contract, parts }   (contract + full snapshot)
  *   client -> { type:'commands', batch:[...] }
- *   server -> { type:'diff', added, removed, cleared }   (broadcast to all)
- *   server -> { type:'ack', addedIds, removed, cleared, errors }   (to the sender)
+ *   server -> { type:'diff', added, removed, cleared, buildBegin }   (broadcast to all)
+ *   server -> { type:'ack', addedIds, removed, cleared, buildBegin, errors }   (to the sender)
  *   server -> { type:'error', message }         (before an auth rejection close)
  */
 export function createServer({ host = '127.0.0.1', port = 8787, authRequired = false, token, seed = false } = {}) {
@@ -61,12 +61,19 @@ export function createServer({ host = '127.0.0.1', port = 8787, authRequired = f
         }
         if (msg.type !== 'commands') return
         const r = applyBatch(store, msg.batch || [])
-        broadcast({ type: 'diff', added: r.added, removed: r.removed, cleared: r.cleared })
+        broadcast({
+          type: 'diff',
+          added: r.added,
+          removed: r.removed,
+          cleared: r.cleared,
+          buildBegin: r.buildBegin,
+        })
         ws.send(JSON.stringify({
           type: 'ack',
           addedIds: r.added.map(a => a.id),
           removed: r.removed,
           cleared: r.cleared,
+          buildBegin: r.buildBegin,
           errors: r.errors,
         }))
       })

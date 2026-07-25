@@ -1,0 +1,143 @@
+# I-6 — Teach the viewer what a "build" is
+
+- **Item ID:** I-6
+- **Version:** unreleased
+- **Date:** 2026-07-26
+- **Tests:** 68 vitest (9 added), 150 skill pytest (6 added), 1 skipped
+- **Status:** complete, awaiting a release.
+- **Related work:** completes I-5. I-5 created the concept of a build inside `build.py`; this makes
+  it visible to the viewer, which is the half that could not be done from the skill alone.
+
+## Objective
+
+Reported from use: build the white house, inspect it, then build the golden gate bridge — and the
+camera never moves to the new build. Two compounding causes, and a third underneath them.
+
+**Nothing hands the camera back.** `Viewer` re-engaged the agent camera on exactly one event,
+`world.onClear`. Any pointer/wheel/touch flips `CameraDirector` to USER mode and the auto-framer
+stands down permanently. Neither plan had a `clear` stage, so nothing ever flipped it back.
+
+**Even in agent mode it framed the wrong thing.** `_worldBounds()` fitted *all* parts. The white
+house spans x −76..72, the bridge x −500..−100; fitting both gives a ~600-block sphere — two specks,
+not "the new building".
+
+**Underneath both: the viewer had no concept of a build.** It saw a stream of parts and therefore
+*could not* know which ones were the new thing. This is not a tuning problem. No timing heuristic
+recovers the boundary either, because `build.py` paces stages at `350 + 18(n-1)` ms — a 100-part
+stage waits 2.1 s — so the gap *within* one build is unbounded and any threshold eventually splits a
+build in two.
+
+## Approach
+
+Make "a build is starting" a domain event in the published contract, and let the viewer decide what
+it means.
+
+`build_begin` joins `CONTROL_OPS` and `OP_SCHEMA` with no fields. The server relays it and touches no
+state; it rides the existing diff alongside `cleared`. `build.py` sends it once, as its own batch,
+ahead of stage 1.
+
+**No Go changes were needed** and none were made: `contract.Ops` is unmarshalled from the published
+payload and `OpNames` lists whatever the server declares, so the CLI picked the op up the moment the
+server restarted. Verified live — `world.py` reports it, and the CLI refuses an *unpublished* op
+client-side with exit 5, which is what makes the marker safe against an older server.
+
+### The viewer side
+
+`World` gained `onBuildBegin` (fired **before** the diff is applied) and `onAdded(ids)`, plus
+`boundsOf(ids)`. `Viewer` owns a focus group and the whole behaviour is four lines of policy:
+
+| Event | Focus group | Camera |
+|---|---|---|
+| `onBuildBegin` | `new Set()` — active, empty | reclaim |
+| `onAdded(ids)` | extend, if active | frame `boundsOf(group)` |
+| `onClear` | `null` | reclaim, frame the world |
+| `F` / `reframe` | `null` | frame the world |
+
+The clear-then-build case falls out for free: `build_begin` activates the focus, the `clear` stage
+deactivates it, and whole-world framing is then *identical* to build framing because the build is all
+there is. The connect snapshot is safe for the same reason — no marker, so the focus stays inactive.
+
+`CameraDirector` stores a finished **sphere**, never a set of ids, so the framing math runs once per
+landed stage rather than once per frame. `_worldBounds` became `_framedBounds`, which prefers the
+focus. `reframe()` (`F`) drops the focus — "show me everything" is the complement to build-scoped
+framing and the only way back out to it.
+
+### One piece of framing math
+
+`getBounds()` and `boundsOf()` share module-level `aabbOf` / `sphereOf`; `getStats` was rewritten to
+use `aabbOf` too. The alternative — a second min/max loop for the subset — would have been two
+implementations of framing that could disagree.
+
+### A new build always reclaims the camera
+
+This extends the locked "agent owns the camera, human takes it on mouse-touch" invariant, which
+already excepted `clear`. The reviewer takes it back the same way as always, by touching the canvas.
+`--no-focus` opts a build out.
+
+### What was deliberately not built
+
+**The marker carries no fields.** A `name` would let the HUD toast "building golden-gate-bridge",
+and Go's `checkField` has `default: return nil` so an unknown field type is safe — but the complaint
+was the camera, not labels, and field-less matches `clear` and `world_info`. Easy follow-up.
+
+## Files changed
+
+| File | Change |
+|---|---|
+| `packages/shared/protocol.js` | `build_begin` in `CONTROL_OPS`, `OP_SCHEMA`, `validate`; a doc block on why a control op exists purely as a grouping signal. |
+| `apps/server/commands.js`, `createServer.js` | `buildBegin` relayed in the diff and the ack, never mutating the store. |
+| `apps/web/src/engine/World.js` | `onBuildBegin` / `onAdded`; `boundsOf(ids)`; `aabbOf` / `sphereOf` extracted and shared with `getStats` / `getBounds`. |
+| `apps/web/src/viewer/CameraDirector.js` | `focusBounds` + `focusOn()`; `_worldBounds` → `_framedBounds`; `reframe()` drops the focus; canned views honour it. |
+| `apps/web/src/viewer/Viewer.js` | Owns the focus group and the four-row policy above. |
+| `apps/web/src/net/WsClient.js`, `main.js` | Forward `buildBegin` online and offline, keeping the two paths identical. |
+| `.claude/skills/codeblox-builder/scripts/build.py` | `FOCUS_MARKER` sent as its own batch ahead of stage 1 and included in the up-front validation; `--no-focus`. |
+| `.gitignore` | `builds/` — the plan working directory, untracked. |
+
+### Why `builds/`, and why it is gitignored
+
+Not `~/.codeblox/builds/`: that is the Go CLI's base dir — state the tool manages for itself (the
+`world_info` cache, credentials), derived or secret, never authored. Plans are authored, and they are
+*per-project* — they carry coordinates and materials that mean something only against this world — so
+they belong beside the work rather than in a global per-user tool dir.
+
+**Gitignored**, because `builds/` is where the agent writes every plan it ever authors. Tracking the
+directory would mean committing every experiment. The two that exist now are good demonstrations, but
+that argues for curating a couple of examples someday, not for versioning the scratch space — and a
+plan is cheap to regenerate from the prompt that produced it.
+
+`build.py` stays path-agnostic — it reads **stdin** and never opens a plan file — so `builds/` is a
+convention stated in `SKILL.md`, not a path hardcoded in a script. That also keeps the skill portable
+to a repo that is not this one.
+
+## Verification
+
+| Check | Result |
+|---|---|
+| vitest | 59 → **68 passed** |
+| skill pytest | 144 → **150 passed**, 1 skipped |
+| Contract propagation | `world.py` lists `build_begin` after a server restart, with no Go rebuild |
+| Old-server guard | The CLI refuses an unpublished op client-side: exit **5**, naming what the server publishes |
+| Marker placement | Sent as its own batch before stage 1; not counted as a stage; absent under `--dry-run` and `--no-focus` |
+| **The reported scenario** | See below |
+
+A stand-in ws client logged what a connected viewer actually receives while both plans were built
+back to back into the same world:
+
+```
+welcome: 78 parts already in world
+diff: added=0 cleared=true
+diff: added=0 cleared=false   <== BUILD BEGIN      white house
+diff: added=4 / 6 / 10 / 14 / 6
+diff: added=0 cleared=false   <== BUILD BEGIN      bridge, white house still standing
+diff: added=3 / 3 / 8 / 8 / 8
+```
+
+The second marker is the bug: a build arriving into a populated world, which previously looked
+identical to any other parts. The viewer now receives the boundary, resets its focus group there, and
+accumulates only ids 41..70.
+
+**Not confirmed visually: the camera motion in a browser after a human drags the canvas.** That is
+the one link no automated check here covers — the `Viewer` wiring needs a real WebGL context. The
+pieces it composes are each tested (`onBuildBegin` fires before adds; `boundsOf` of a far-away
+cluster differs from the world's; `focusOn` prefers the focus sphere), and the data reaching the
+viewer is shown above, but the visual result wants a human glance.

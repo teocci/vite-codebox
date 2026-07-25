@@ -77,6 +77,12 @@ describe('protocol.validate', () => {
     expect(validate({ op: 'remove', id: -1 }).ok).toBe(false)
     expect(validate({ op: 'frobnicate' }).ok).toBe(false)
   })
+
+  it('accepts build_begin, which carries no fields', () => {
+    expect(validate({ op: 'build_begin' }).ok).toBe(true)
+    expect(isPartOp('build_begin')).toBe(false)
+    expect(expand({ op: 'build_begin' })).toEqual([])
+  })
 })
 
 describe('protocol.expand', () => {
@@ -107,5 +113,14 @@ describe('protocol.contract', () => {
     expect(c.config.blockLabel).toBe('2 cm')
     expect(c.palette.oak).toEqual({ color: 0xc9a377, family: 'opaque' })
     expect(c.ops.find(o => o.op === 'box')).toBeTruthy()
+  })
+
+  it('publishes build_begin, so schema-driven clients can send it', () => {
+    // The Go CLI validates against this payload; an unpublished op is refused
+    // client-side and never reaches the server.
+    expect(contract().ops.find(o => o.op === 'build_begin')).toEqual({
+      op: 'build_begin',
+      fields: {},
+    })
   })
 })

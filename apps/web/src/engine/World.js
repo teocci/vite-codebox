@@ -8,6 +8,37 @@ import { materialColor, materialFamily } from '@codeblox/shared/materials.js'
 
 const IDENTITY_QUAT = new Quaternion()
 
+/** AABB of any iterable of parts, in block space. count 0 means "no parts". */
+const aabbOf = parts => {
+  const min = [Infinity, Infinity, Infinity]
+  const max = [-Infinity, -Infinity, -Infinity]
+  let count = 0
+  for (const p of parts) {
+    count++
+    for (let i = 0; i < 3; i++) {
+      const lo = p.center[i] - p.size[i] / 2
+      const hi = p.center[i] + p.size[i] / 2
+      if (lo < min[i]) min[i] = lo
+      if (hi > max[i]) max[i] = hi
+    }
+  }
+  return count ? { min, max, count } : { min: [0, 0, 0], max: [0, 0, 0], count: 0 }
+}
+
+/**
+ * Bounding sphere of any iterable of parts, for camera framing. Shared by the
+ * whole-world bounds and the per-build focus bounds so there is one piece of
+ * framing math, not two that can disagree.
+ */
+const sphereOf = parts => {
+  const { min, max, count } = aabbOf(parts)
+  if (count === 0) return { center: [0, 0, 0], radius: 0 }
+  return {
+    center: [0, 1, 2].map(i => (min[i] + max[i]) / 2),
+    radius: 0.5 * Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]),
+  }
+}
+
 /**
  * The viewer's world: the semantic parts map plus the instanced render layers.
  * Consumes normalized diffs ({ added, removed, cleared }) — the exact shape the
@@ -28,6 +59,8 @@ export default class World {
     this.animator = new DropAnimator((layerKey, id, m) => this.layers.get(layerKey)?.setMatrix(id, m), now)
     this.onChange = null
     this.onClear = null
+    this.onBuildBegin = null
+    this.onAdded = null
     this._stats = null
     this._bounds = null
     this._m = new Matrix4()
@@ -37,7 +70,10 @@ export default class World {
 
   // --- diff application -----------------------------------------------------
 
-  applyDiff({ added = [], removed = [], cleared = false, animate = true } = {}) {
+  applyDiff({ added = [], removed = [], cleared = false, buildBegin = false, animate = true } = {}) {
+    // Fires before anything is applied so a listener can reset per-build state
+    // (the camera's focus group) and then receive that build's ids via onAdded.
+    if (buildBegin) this.onBuildBegin?.()
     if (cleared) this.clear()
     const removedIds = []
     for (const spec of removed) {
@@ -48,6 +84,7 @@ export default class World {
     added.forEach((part, i) => addedIds.push(this.addPart(part, i, animate)))
     this._invalidate()
     this.onChange?.()
+    if (addedIds.length) this.onAdded?.(addedIds)
     return { addedIds, removedIds, cleared }
   }
 
@@ -123,46 +160,37 @@ export default class World {
 
   getStats() {
     if (this._stats) return this._stats
-    const min = [Infinity, Infinity, Infinity]
-    const max = [-Infinity, -Infinity, -Infinity]
+    const { min, max } = aabbOf(this.parts.values())
     const mats = new Set()
-    for (const p of this.parts.values()) {
-      mats.add(p.material)
-      for (let i = 0; i < 3; i++) {
-        const lo = p.center[i] - p.size[i] / 2
-        const hi = p.center[i] + p.size[i] / 2
-        if (lo < min[i]) min[i] = lo
-        if (hi > max[i]) max[i] = hi
-      }
-    }
-    const has = this.parts.size > 0
-    const extent = has ? [max[0] - min[0], max[1] - min[1], max[2] - min[2]] : [0, 0, 0]
+    for (const p of this.parts.values()) mats.add(p.material)
     this._stats = {
       count: this.parts.size,
       materialsUsed: mats.size,
       layers: this.layers.size,
-      min: has ? min : [0, 0, 0],
-      max: has ? max : [0, 0, 0],
-      extent,
+      min,
+      max,
+      extent: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
     }
     return this._stats
   }
 
-  /** Bounding sphere in block space, for camera framing. */
+  /** Bounding sphere of the whole world in block space, for camera framing. */
   getBounds() {
-    if (this._bounds) return this._bounds
-    const s = this.getStats()
-    if (s.count === 0) {
-      this._bounds = { center: [0, 0, 0], radius: 0 }
-      return this._bounds
-    }
-    const center = [
-      (s.min[0] + s.max[0]) / 2,
-      (s.min[1] + s.max[1]) / 2,
-      (s.min[2] + s.max[2]) / 2,
-    ]
-    const radius = 0.5 * Math.hypot(s.extent[0], s.extent[1], s.extent[2])
-    this._bounds = { center, radius }
+    this._bounds ??= sphereOf(this.parts.values())
     return this._bounds
+  }
+
+  /**
+   * Bounding sphere of just these ids — what the camera frames while following
+   * one build. Unknown ids are skipped, so a caller holding ids that have since
+   * been removed still gets a usable sphere rather than a throw.
+   */
+  boundsOf(ids) {
+    const parts = []
+    for (const id of ids) {
+      const part = this.parts.get(id)
+      if (part) parts.push(part)
+    }
+    return sphereOf(parts)
   }
 }

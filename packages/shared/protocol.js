@@ -19,7 +19,16 @@ import { blockLabel, BLOCK_SIZE } from './config.js'
 import { MATERIALS } from './materials.js'
 
 export const PART_OPS = new Set(['box', 'fill', 'sphere', 'cylinder'])
-export const CONTROL_OPS = new Set(['remove', 'clear', 'world_info'])
+
+/**
+ * Control ops carry no geometry. `build_begin` marks the start of one build — a
+ * plan's worth of parts arriving over several batches — and touches no state:
+ * it exists so a viewer can tell "these parts are the new thing" from "these
+ * parts were already here". Without it the viewer sees only a stream of parts
+ * and cannot group them, and no timing heuristic can recover the boundary,
+ * because the gap between a build's own stages is unbounded.
+ */
+export const CONTROL_OPS = new Set(['remove', 'clear', 'world_info', 'build_begin'])
 
 export const isPartOp = op => PART_OPS.has(op)
 export const isControlOp = op => CONTROL_OPS.has(op)
@@ -33,6 +42,7 @@ export const OP_SCHEMA = [
   { op: 'remove', fields: { id: 'id' } },
   { op: 'clear', fields: {} },
   { op: 'world_info', fields: {} },
+  { op: 'build_begin', fields: {} },
 ]
 
 // --- validation helpers -----------------------------------------------------
@@ -129,6 +139,7 @@ export const validate = cmd => {
       break
     case 'clear':
     case 'world_info':
+    case 'build_begin':
       break
   }
 

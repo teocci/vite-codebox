@@ -19,6 +19,7 @@ const applyLocal = commands => {
   const removed = []
   const errors = []
   let cleared = false
+  let buildBegin = false
 
   for (const cmd of list) {
     const v = validate(cmd)
@@ -37,10 +38,14 @@ const applyLocal = commands => {
       continue
     }
     if (cmd.op === 'world_info') continue
+    if (cmd.op === 'build_begin') {
+      buildBegin = true
+      continue
+    }
     if (isPartOp(cmd.op)) added.push(...expand(cmd))
   }
 
-  const r = viewer.world.applyDiff({ added, removed, cleared })
+  const r = viewer.world.applyDiff({ added, removed, cleared, buildBegin })
   if (errors.length) console.warn('[codeblox] rejected:', errors)
   return { ...r, errors, mode: 'local' }
 }

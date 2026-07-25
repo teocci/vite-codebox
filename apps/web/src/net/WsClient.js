@@ -62,6 +62,7 @@ export default class WsClient {
           added: msg.added || [],
           removed: msg.removed || [],
           cleared: msg.cleared,
+          buildBegin: msg.buildBegin,
           animate: true,
         })
         break

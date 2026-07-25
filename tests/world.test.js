@@ -91,6 +91,50 @@ describe('World integration', () => {
     expect(world.getBounds().radius).toBe(0)
   })
 
+  it('fires onBuildBegin before the parts of that build arrive', () => {
+    const world = new World({ now })
+    const order = []
+    world.onBuildBegin = () => order.push('begin')
+    world.onAdded = ids => order.push(`added:${ids.length}`)
+
+    world.applyDiff({ buildBegin: true, added: [box([0, 0, 0], [2, 2, 2], 'oak')] })
+
+    // Order matters: a listener resets its focus group on begin, then collects
+    // the ids. Reversed, the reset would throw the build's first stage away.
+    expect(order).toEqual(['begin', 'added:1'])
+  })
+
+  it('does not fire onBuildBegin for ordinary diffs', () => {
+    const world = new World({ now })
+    let begins = 0
+    world.onBuildBegin = () => begins++
+    world.applyDiff({ added: [box([0, 0, 0], [2, 2, 2], 'oak')] })
+    world.applyDiff({ cleared: true })
+    expect(begins).toBe(0)
+  })
+
+  it('boundsOf frames only the given ids, not the whole world', () => {
+    // The reported bug: a build lands far from an existing one, and framing the
+    // world puts both on screen as specks instead of showing the new thing.
+    const world = new World({ now })
+    const { addedIds: near } = world.applyDiff({ added: [box([0, 0, 0], [4, 4, 4], 'oak')] })
+    world.applyDiff({ added: [box([500, 0, 0], [4, 4, 4], 'oak')] })
+
+    const whole = world.getBounds()
+    const focused = world.boundsOf(near)
+
+    expect(whole.radius).toBeGreaterThan(200)
+    expect(focused.radius).toBeLessThan(10)
+    expect(focused.center[0]).toBe(2) // the near box's own centre, not the midpoint
+  })
+
+  it('boundsOf skips ids that are gone rather than throwing', () => {
+    const world = new World({ now })
+    const { addedIds } = world.applyDiff({ added: [box([0, 0, 0], [4, 4, 4], 'oak')] })
+    world.removePart(addedIds[0])
+    expect(world.boundsOf(addedIds)).toEqual({ center: [0, 0, 0], radius: 0 })
+  })
+
   it('drops new parts in and settles them (animator drains)', () => {
     const world = new World({ now })
     world.applyDiff({ added: [box([0, 0, 0], [2, 2, 2], 'oak'), box([4, 0, 0], [2, 2, 2], 'oak')] })
