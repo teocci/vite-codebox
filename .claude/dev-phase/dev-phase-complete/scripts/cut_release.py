@@ -29,6 +29,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'dev-phase-lib' / '
 import tracklib as tl  # noqa: E402
 
 
+def bump_version_text(text: str, attr: str, version: str, where: str = 'the version file') -> str:
+    '''Rewrite the single version literal in *text*, preserving separator and quote style.
+
+    Accepts assignment form (``__version__ = '1.2.3'`` — Python/JS) and mapping form
+    (``"version": "1.2.3"`` — JSON/YAML), so one helper serves any project language. The
+    quote character is captured and reused, which is what keeps a JSON version file valid.
+
+    Raises SystemExit when nothing matched: a silent no-op here would report a bump that
+    never happened and leave the release incoherent.
+    '''
+    pattern = re.escape(attr) + r"(\s*[:=]\s*)(['\"])[^'\"]+\2"
+    out, n = re.subn(pattern, rf'{attr}\g<1>\g<2>{version}\g<2>', text, count=1)
+    if n == 0:
+        raise SystemExit(
+            f'version bump failed: no {attr} literal found in {where} — '
+            f'check version_file/version_attr in docs/conventions/tracking.md')
+    return out
+
+
 def _stamp_detail(text: str, version: str, date: str, tests: int) -> str:
     status = f'✅ DONE ({tests} tests; live-verified).'
     text = re.sub(r'(\*\*Version:\*\*\s*)\(pending\)', rf'\g<1>{version}', text)
@@ -63,10 +82,8 @@ def cut(args: argparse.Namespace) -> dict:
 
     # 1. version bump (version_file only)
     vf = root / cfg['version_file']
-    vtext = vf.read_text(encoding='utf-8')
-    attr = re.escape(cfg['version_attr'])
-    nvtext = re.sub(attr + r"(\s*=\s*)['\"][^'\"]+['\"]", rf"{cfg['version_attr']}\g<1>'{version}'", vtext, count=1)
-    edits[vf] = nvtext
+    edits[vf] = bump_version_text(vf.read_text(encoding='utf-8'), cfg['version_attr'], version,
+                                  where=cfg['version_file'])
     actions.append(f'bump {cfg["version_file"]} -> {version}')
 
     # 2. changelog roll
