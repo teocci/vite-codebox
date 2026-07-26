@@ -70,6 +70,20 @@ describe('protocol.validate', () => {
     expect(validate({ op: 'cylinder', at: [0, 5, 0], r: 2, h: 10, mat: 'iron' }).ok).toBe(true)
     expect(validate({ op: 'sphere', at: [0, 5, 0], r: 0, mat: 'glass' }).ok).toBe(false)
   })
+  it('validates ellipsoid, which takes a full extent rather than one radius', () => {
+    expect(validate({ op: 'ellipsoid', at: [0, 20, 0], size: [8, 4, 12], mat: 'glass' }).ok).toBe(true)
+    expect(validate({ op: 'ellipsoid', at: [0, 20, 0], size: [8, 0, 12], mat: 'glass' }).ok).toBe(false)
+    expect(validate({ op: 'ellipsoid', at: [0, 20, 0], r: 4, mat: 'glass' }).ok).toBe(false)
+  })
+  it('validates tube, and refuses an axis that is not x, y or z', () => {
+    for (const axis of ['x', 'y', 'z']) {
+      expect(validate({ op: 'tube', at: [0, 20, 0], r: 5, h: 40, axis, mat: 'iron' }).ok).toBe(true)
+    }
+    const bad = validate({ op: 'tube', at: [0, 20, 0], r: 5, h: 40, axis: 'w', mat: 'iron' })
+    expect(bad.ok).toBe(false)
+    expect(bad.errors.join()).toMatch(/axis/)
+    expect(validate({ op: 'tube', at: [0, 20, 0], r: 5, h: 40, mat: 'iron' }).ok).toBe(false)
+  })
   it('validates control ops', () => {
     expect(validate({ op: 'clear' }).ok).toBe(true)
     expect(validate({ op: 'world_info' }).ok).toBe(true)
@@ -99,6 +113,23 @@ describe('protocol.expand', () => {
     expect(p.kind).toBe('box')
     expect(p.size).toEqual([3, 1, 3])
     expect(p.center).toEqual([1.5, 0.5, 1.5])
+  })
+  it('normalizes an ellipsoid onto the sphere geometry', () => {
+    // kind is 'sphere' on purpose: the instance matrix already carries a
+    // non-uniform scale, so three radii need no new geometry and no new layer.
+    const [p] = expand({ op: 'ellipsoid', at: [5, 25, 5], size: [8, 4, 12], mat: 'glass' })
+    expect(p).toEqual({ kind: 'sphere', center: [5, 25, 5], size: [8, 4, 12], material: 'glass' })
+  })
+  it('normalizes a tube by permuting its size onto the named axis', () => {
+    const cases = {
+      x: { kind: 'cylinder_x', size: [40, 10, 10] },
+      y: { kind: 'cylinder', size: [10, 40, 10] },
+      z: { kind: 'cylinder_z', size: [10, 10, 40] },
+    }
+    for (const [axis, want] of Object.entries(cases)) {
+      const [p] = expand({ op: 'tube', at: [0, 50, 0], r: 5, h: 40, axis, mat: 'iron' })
+      expect(p).toEqual({ ...want, center: [0, 50, 0], material: 'iron' })
+    }
   })
   it('returns [] for control ops', () => {
     expect(expand({ op: 'clear' })).toEqual([])

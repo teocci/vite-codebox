@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { Matrix4 } from 'three'
 import World from '../apps/web/src/engine/World.js'
+import { makeGeometries, GEOMETRY_KINDS } from '../apps/web/src/engine/geometry.js'
 import { expand } from '@codeblox/shared/protocol.js'
 
 // A manual clock so drop animations are deterministic in tests.
@@ -143,5 +144,32 @@ describe('World integration', () => {
     expect(world.animator.size).toBeGreaterThan(0)
     settle(world)
     expect(world.animator.size).toBe(0) // settled, never touched again
+  })
+
+  // The protocol invents kind strings; the engine builds one layer per kind. A
+  // kind in one and not the other is a part the server accepts and nothing draws
+  // — silent, and invisible to every other test here.
+  it('has a geometry for every kind the protocol can produce', () => {
+    expect(Object.keys(makeGeometries()).sort()).toEqual([...GEOMETRY_KINDS].sort())
+
+    const commands = [
+      { op: 'box', at: [0, 0, 0], size: [2, 2, 2], mat: 'oak' },
+      { op: 'fill', from: [0, 0, 0], to: [2, 2, 2], mat: 'oak' },
+      { op: 'sphere', at: [0, 5, 0], r: 2, mat: 'oak' },
+      { op: 'ellipsoid', at: [0, 5, 0], size: [8, 4, 12], mat: 'oak' },
+      { op: 'cylinder', at: [0, 5, 0], r: 2, h: 6, mat: 'oak' },
+      ...['x', 'y', 'z'].map(axis => ({ op: 'tube', at: [0, 5, 0], r: 2, h: 6, axis, mat: 'oak' })),
+    ]
+    for (const cmd of commands) {
+      for (const part of expand(cmd)) expect(GEOMETRY_KINDS).toContain(part.kind)
+    }
+  })
+
+  it('renders a tube on each axis as a distinct layer', () => {
+    const world = new World({ now })
+    const added = ['x', 'y', 'z'].flatMap(axis =>
+      expand({ op: 'tube', at: [0, 20, 0], r: 2, h: 20, axis, mat: 'oak' }))
+    world.applyDiff({ added })
+    expect(world.getStats().count).toBe(3)
   })
 })

@@ -3,10 +3,21 @@
  * and (over the wire, via contract()) the Go CLI. Dependency-free.
  *
  * Coordinate convention: integer block coordinates, y-up.
- *   box      at = min corner,      size = [w,h,d]
- *   fill     from/to = inclusive corner cells        -> one box part
- *   sphere   at = center,          r                 (axis-aligned)
- *   cylinder at = center,          r, h              (axis = y in v1)
+ *   box       at = min corner,      size = [w,h,d]
+ *   fill      from/to = inclusive corner cells       -> one box part
+ *   sphere    at = center,          r                (axis-aligned)
+ *   ellipsoid at = center,          size = [w,h,d]   -> a sphere with three radii
+ *   cylinder  at = center,          r, h             (axis = y)
+ *   tube      at = center,          r, h, axis       -> a cylinder about x, y or z
+ *
+ * `ellipsoid` and `tube` exist because the renderer could already draw both and
+ * only the schema refused to describe them: the instance matrix carries a fully
+ * non-uniform scale, so a unit sphere becomes any axis-aligned ellipsoid, and
+ * three baked cylinder geometries cover the three axes. Neither needs rotation,
+ * so parts stay axis-aligned and every AABB stays exact. They are new ops rather
+ * than new fields on `sphere`/`cylinder` deliberately — the Go client requires
+ * every declared field to be present, so widening an existing op would break
+ * every command already written against it.
  *
  * Every part op normalizes to { kind, center, size, material } in block space,
  * where center is the geometry center and size is the full extent. The renderer
@@ -18,7 +29,10 @@ import { isMaterial } from './materials.js'
 import { blockLabel, BLOCK_SIZE } from './config.js'
 import { MATERIALS } from './materials.js'
 
-export const PART_OPS = new Set(['box', 'fill', 'sphere', 'cylinder'])
+export const PART_OPS = new Set(['box', 'fill', 'sphere', 'ellipsoid', 'cylinder', 'tube'])
+
+/** The axes a `tube` may run along, in the order its size triple is indexed. */
+export const AXES = ['x', 'y', 'z']
 
 /**
  * Control ops carry no geometry. `build_begin` marks the start of one build — a
@@ -38,7 +52,9 @@ export const OP_SCHEMA = [
   { op: 'box', fields: { at: 'int3', size: 'int3+', mat: 'material' } },
   { op: 'fill', fields: { from: 'int3', to: 'int3', mat: 'material' } },
   { op: 'sphere', fields: { at: 'int3', r: 'int+', mat: 'material' } },
+  { op: 'ellipsoid', fields: { at: 'int3', size: 'int3+', mat: 'material' } },
   { op: 'cylinder', fields: { at: 'int3', r: 'int+', h: 'int+', mat: 'material' } },
+  { op: 'tube', fields: { at: 'int3', r: 'int+', h: 'int+', axis: 'axis', mat: 'material' } },
   { op: 'remove', fields: { id: 'id' } },
   { op: 'clear', fields: {} },
   { op: 'world_info', fields: {} },
@@ -72,9 +88,22 @@ const toPart = cmd => {
       const d = cmd.r * 2
       return { kind: 'sphere', center: [...cmd.at], size: [d, d, d], material: cmd.mat }
     }
+    case 'ellipsoid':
+      // Reuses the sphere geometry and therefore its InstancedMesh: the unit
+      // sphere is already scaled per instance, so three radii cost nothing.
+      return { kind: 'sphere', center: [...cmd.at], size: [...cmd.size], material: cmd.mat }
     case 'cylinder': {
       const d = cmd.r * 2
       return { kind: 'cylinder', center: [...cmd.at], size: [d, cmd.h, d], material: cmd.mat }
+    }
+    case 'tube': {
+      // The axis is carried by a pre-rotated geometry, not by the matrix, so the
+      // size triple below IS the world AABB and partAabb stays exact.
+      const d = cmd.r * 2
+      const size = [d, d, d]
+      size[AXES.indexOf(cmd.axis)] = cmd.h
+      const kind = cmd.axis === 'y' ? 'cylinder' : `cylinder_${cmd.axis}`
+      return { kind, center: [...cmd.at], size, material: cmd.mat }
     }
     default:
       return null
@@ -129,10 +158,20 @@ export const validate = cmd => {
       if (!isInt3(cmd.at)) errors.push('at must be 3 integers')
       if (!isPosInt(cmd.r)) errors.push('r must be a positive integer')
       break
+    case 'ellipsoid':
+      if (!isInt3(cmd.at)) errors.push('at must be 3 integers')
+      if (!isInt3(cmd.size) || !cmd.size?.every?.(isPosInt)) errors.push('size must be 3 positive integers')
+      break
     case 'cylinder':
       if (!isInt3(cmd.at)) errors.push('at must be 3 integers')
       if (!isPosInt(cmd.r)) errors.push('r must be a positive integer')
       if (!isPosInt(cmd.h)) errors.push('h must be a positive integer')
+      break
+    case 'tube':
+      if (!isInt3(cmd.at)) errors.push('at must be 3 integers')
+      if (!isPosInt(cmd.r)) errors.push('r must be a positive integer')
+      if (!isPosInt(cmd.h)) errors.push('h must be a positive integer')
+      if (!AXES.includes(cmd.axis)) errors.push(`axis must be one of ${AXES.join(', ')}`)
       break
     case 'remove':
       if (!isInt(cmd.id) || cmd.id < 0) errors.push('id must be a non-negative integer')
