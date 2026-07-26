@@ -1,6 +1,6 @@
 '''Fetch the server's published contract and reduce it to a token-small digest.
 
-    $VENV/python .claude/skills/codeblox-builder/scripts/world.py [--refresh] [--json] [--bin PATH]
+    $VENV/python .claude/skills/codeblox-builder/scripts/world.py [--json] [--bin PATH]
 
 Nothing about ops or materials is written into this skill. The op list, their
 field types, the palette, and the world extent all come from `codeblox info`,
@@ -38,16 +38,30 @@ class WorldError(Exception):
     '''The contract could not be fetched or understood.'''
 
 
-def fetch(binary: str, refresh: bool = False, run=None, env=None) -> dict:
+class AnchorError(WorldError):
+    '''A command has no anchoring rule, so its geometry cannot be measured.
+
+    Separate from WorldError because the two mean different things to a caller:
+    a failed fetch is a server problem (exit 4), while an op this module cannot
+    measure is a command rejected before anything was sent (exit 5).
+    '''
+
+
+def fetch(binary: str, run=None, env=None) -> dict:
     '''Run `codeblox info --json` and return the parsed contract.
 
-    The CLI caches the contract at ~/.codeblox/world_info.json and serves reads
-    from there, so this is cheap to call repeatedly. --refresh forces a fetch.
+    `info` dials the server on every call and writes ~/.codeblox/world_info.json
+    as a side effect; it never reads it. Only `codeblox materials` serves from
+    that cache, which is why only `materials` carries a --refresh flag. So every
+    fetch here is already live — there is no cache to bypass, and passing
+    --refresh would be rejected by the verb rather than ignored.
+
+    The practical consequence is worth stating, because getting it backwards has
+    cost a misdiagnosis before: if this returns a contract that looks out of
+    date, the *server* is stale, not the cache. Restart it.
     '''
     run = run or subprocess.run
     argv = [binary, 'info', '--json']
-    if refresh:
-        argv.append('--refresh')
     try:
         done = run(argv, capture_output=True, text=True, timeout=INFO_TIMEOUT,
                    env=env if env is not None else os.environ.copy())
@@ -81,12 +95,25 @@ def digest(contract: dict) -> dict:
     return {
         'blockSize': config.get('blockSize'),
         'blockLabel': config.get('blockLabel'),
+        'blocksPerMetre': blocks_per_metre(config.get('blockSize')),
         'bounds': bounds_of(contract),
         'extentMetres': config.get('extent'),
         'materialCount': len(palette),
         'families': families,
         'ops': {op['op']: op.get('fields', {}) for op in contract.get('ops', [])},
     }
+
+
+def blocks_per_metre(block_size) -> float | None:
+    '''How many blocks span a metre, or None when the contract does not say.
+
+    Derived here rather than at each call site, because the derivation is the
+    thing that gets skipped: a block is not a metre, and every place that forgets
+    it produces a build off by the same factor with nothing to flag it.
+    '''
+    if not isinstance(block_size, (int, float)) or block_size <= 0:
+        return None
+    return round(1.0 / block_size, 6)
 
 
 def bounds_of(contract: dict) -> dict:
@@ -108,30 +135,69 @@ def bounds_of(contract: dict) -> dict:
 
 # ── the anchoring rule ──────────────────────────────────────────────────────
 
+# Ops that carry no geometry. Listing them explicitly — rather than treating
+# "not in the table below" as "occupies nothing" — is what lets aabb() raise on
+# an op it does not recognise. A silent None there would let a part slip past
+# both the bounds gate and the scale gate, which is exactly how `fill` used to
+# escape unchecked.
+CONTROL_OPS = frozenset({'remove', 'clear', 'world_info', 'build_begin'})
+
+AXES = ('x', 'y', 'z')
+
+
+def _centred(at, half: list[float]) -> tuple[list[float], list[float]]:
+    '''(min, max) for a part centred on `at` with the given half-extents.'''
+    return ([at[i] - half[i] for i in range(3)],
+            [at[i] + half[i] for i in range(3)])
+
+
 def aabb(command: dict) -> tuple[list[float], list[float]] | None:
     '''The axis-aligned box a command occupies, as (min, max) in blocks.
 
     Each op anchors differently, and the difference is easy to get wrong:
 
-        box       `at` is the MINIMUM CORNER   -> at .. at + size
-        sphere    `at` is the CENTRE           -> at - r .. at + r
-        cylinder  `at` is the CENTRE, and the height is centred on it too
-                                               -> at.y - h/2 .. at.y + h/2
+        box        `at` is the MINIMUM CORNER   -> at .. at + size
+        fill       `from`/`to` are INCLUSIVE cells, so the extent is |to-from|+1
+        sphere     `at` is the CENTRE           -> at - r .. at + r
+        ellipsoid  `at` is the CENTRE, `size` is the FULL extent -> at +- size/2
+        cylinder   `at` is the CENTRE, and the height is centred on it too
+                                                -> at.y - h/2 .. at.y + h/2
+        tube       like `cylinder`, but `h` runs along `axis` and the other two
+                   axes take the diameter
 
-    Returns None for ops that occupy nothing (clear, remove).
+    Returns None for control ops, which occupy nothing. Raises WorldError for
+    anything else: an unrecognised op must fail loudly rather than be treated as
+    occupying nothing, or it would bypass every geometric check downstream.
     '''
     op = command.get('op')
+    if op in CONTROL_OPS:
+        return None
     if op == 'box':
         at, size = command['at'], command['size']
         return list(at), [at[i] + size[i] for i in range(3)]
+    if op == 'fill':
+        start, end = command['from'], command['to']
+        low = [min(start[i], end[i]) for i in range(3)]
+        return low, [low[i] + abs(end[i] - start[i]) + 1 for i in range(3)]
     if op == 'sphere':
-        at, r = command['at'], command['r']
-        return [at[i] - r for i in range(3)], [at[i] + r for i in range(3)]
+        r = command['r']
+        return _centred(command['at'], [r, r, r])
+    if op == 'ellipsoid':
+        size = command['size']
+        return _centred(command['at'], [size[i] / 2 for i in range(3)])
     if op == 'cylinder':
-        at, r, h = command['at'], command['r'], command['h']
-        return ([at[0] - r, at[1] - h / 2, at[2] - r],
-                [at[0] + r, at[1] + h / 2, at[2] + r])
-    return None
+        r, h = command['r'], command['h']
+        return _centred(command['at'], [r, h / 2, r])
+    if op == 'tube':
+        r, h, axis = command['r'], command['h'], command['axis']
+        if axis not in AXES:
+            raise AnchorError(f'tube axis must be one of {", ".join(AXES)}; got {axis!r}')
+        half = [r, r, r]
+        half[AXES.index(axis)] = h / 2
+        return _centred(command['at'], half)
+    raise AnchorError(
+        f'no anchoring rule for op {op!r} — add one to world.aabb() before using it, '
+        f'or it would bypass the bounds and scale gates')
 
 
 def out_of_bounds(command: dict, bounds: dict) -> list[str]:
@@ -160,15 +226,13 @@ def main(argv: list[str] | None = None) -> int:
         description="Digest the server's published contract: ops, materials by family, bounds.",
     )
     parser.add_argument('--bin', help='path to the codeblox binary')
-    parser.add_argument('--refresh', action='store_true',
-                        help='re-fetch instead of using the cached contract')
     parser.add_argument('--json', action='store_true', help='emit the digest as JSON')
     parser.add_argument('--raw', action='store_true', help='emit the contract unreduced')
     args = parser.parse_args(argv)
 
     try:
         binary = rc.resolve(args.bin, os.environ.copy(), Path.cwd())['path']
-        contract = fetch(binary, args.refresh)
+        contract = fetch(binary)
     except (rc.ResolutionError, WorldError) as exc:
         print(f'world: {exc}', file=sys.stderr)
         return EXIT_USAGE if isinstance(exc, rc.ResolutionError) else EXIT_NETWORK
@@ -184,8 +248,10 @@ def main(argv: list[str] | None = None) -> int:
 def render(view: dict) -> str:
     '''A compact human/agent-readable digest.'''
     bounds = view['bounds']
+    per_metre = view.get('blocksPerMetre')
+    scale = f" = {per_metre:g} blocks per metre" if per_metre else ''
     lines = [
-        f"block {view['blockLabel']} ({view['blockSize']} m)   "
+        f"block {view['blockLabel']} ({view['blockSize']} m){scale}   "
         f"world {view['extentMetres']} m half-extent",
         f"bounds  x {bounds['x'][0]}..{bounds['x'][1]}   "
         f"y {bounds['y'][0]}..{bounds['y'][1]}   z {bounds['z'][0]}..{bounds['z'][1]}  (blocks)",

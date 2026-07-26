@@ -8,6 +8,7 @@ the server would accept it — it is valid geometry, just not what was meant.
 
 from __future__ import annotations
 
+import inspect
 import json
 import subprocess
 
@@ -210,12 +211,22 @@ def test_fetch_rejects_output_that_is_not_json():
     assert 'did not emit JSON' in str(exc.value)
 
 
-def test_refresh_is_passed_through():
+def test_fetch_offers_no_refresh_because_info_has_no_cache_to_bypass():
+    # `codeblox info` dials the server on every call — contractFromCache is
+    # reached only by `materials` — so there was never a cache for a refresh to
+    # bypass, and --refresh was never registered on the verb.
+    assert 'refresh' not in inspect.signature(world.fetch).parameters
+
+
+def test_fetch_sends_only_argv_the_info_verb_accepts():
+    # Asserted as equality, not membership: the test this replaces checked that
+    # the mock had *received* --refresh, which stayed green for as long as the
+    # flag was being sent to a verb that rejects it.
     seen = {}
 
     def run(argv, **_kwargs):
         seen['argv'] = argv
         return subprocess.CompletedProcess(argv, 0, json.dumps(CONTRACT), '')
 
-    world.fetch('codeblox', refresh=True, run=run, env={})
-    assert '--refresh' in seen['argv']
+    world.fetch('codeblox', run=run, env={})
+    assert seen['argv'] == ['codeblox', 'info', '--json']

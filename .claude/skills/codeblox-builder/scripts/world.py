@@ -1,6 +1,6 @@
 '''Fetch the server's published contract and reduce it to a token-small digest.
 
-    $VENV/python .claude/skills/codeblox-builder/scripts/world.py [--refresh] [--json] [--bin PATH]
+    $VENV/python .claude/skills/codeblox-builder/scripts/world.py [--json] [--bin PATH]
 
 Nothing about ops or materials is written into this skill. The op list, their
 field types, the palette, and the world extent all come from `codeblox info`,
@@ -47,16 +47,21 @@ class AnchorError(WorldError):
     '''
 
 
-def fetch(binary: str, refresh: bool = False, run=None, env=None) -> dict:
+def fetch(binary: str, run=None, env=None) -> dict:
     '''Run `codeblox info --json` and return the parsed contract.
 
-    The CLI caches the contract at ~/.codeblox/world_info.json and serves reads
-    from there, so this is cheap to call repeatedly. --refresh forces a fetch.
+    `info` dials the server on every call and writes ~/.codeblox/world_info.json
+    as a side effect; it never reads it. Only `codeblox materials` serves from
+    that cache, which is why only `materials` carries a --refresh flag. So every
+    fetch here is already live — there is no cache to bypass, and passing
+    --refresh would be rejected by the verb rather than ignored.
+
+    The practical consequence is worth stating, because getting it backwards has
+    cost a misdiagnosis before: if this returns a contract that looks out of
+    date, the *server* is stale, not the cache. Restart it.
     '''
     run = run or subprocess.run
     argv = [binary, 'info', '--json']
-    if refresh:
-        argv.append('--refresh')
     try:
         done = run(argv, capture_output=True, text=True, timeout=INFO_TIMEOUT,
                    env=env if env is not None else os.environ.copy())
@@ -221,15 +226,13 @@ def main(argv: list[str] | None = None) -> int:
         description="Digest the server's published contract: ops, materials by family, bounds.",
     )
     parser.add_argument('--bin', help='path to the codeblox binary')
-    parser.add_argument('--refresh', action='store_true',
-                        help='re-fetch instead of using the cached contract')
     parser.add_argument('--json', action='store_true', help='emit the digest as JSON')
     parser.add_argument('--raw', action='store_true', help='emit the contract unreduced')
     args = parser.parse_args(argv)
 
     try:
         binary = rc.resolve(args.bin, os.environ.copy(), Path.cwd())['path']
-        contract = fetch(binary, args.refresh)
+        contract = fetch(binary)
     except (rc.ResolutionError, WorldError) as exc:
         print(f'world: {exc}', file=sys.stderr)
         return EXIT_USAGE if isinstance(exc, rc.ResolutionError) else EXIT_NETWORK

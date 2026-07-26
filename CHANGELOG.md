@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-27
+
+the mirrors and the docs stop lying — a drift test for the shipped skill, and a refresh flag that never worked, removed
+
+### Added
+
+- I-11: `npm run sync:skills` mirrors the `codeblox-builder` skill from `.claude/` to `.codex/` and
+  `.agents/`, and a test fails when they drift. The mirrors are copies of one authored source with
+  identical frontmatter — no per-host adaptation — so every difference between them was drift, and
+  they had gone stale after P-7, P-9 and P-10 because nothing failed when they did. The test is the
+  part that matters; a sync script on its own would have been a fourth step to forget. Both mirrors
+  were three files short (`dims.py` and two test modules) and ten files behind. They stay committed
+  rather than generated-and-ignored, because a mirror exists so another agent host can read the skill
+  straight from a checkout.
+
+### Fixed
+
+- F-3: `codeblox-builder`'s `world.py` no longer offers a `--refresh` that never worked. It forwarded
+  the flag to `codeblox info`, which does not accept it, so any refresh was a usage error rather than
+  a re-fetch. The flag could not simply be registered on the verb either: `info` dials the server on
+  every call and only *writes* the contract cache — `materials` is its only reader, and is therefore
+  the only verb the flag belongs on — so making `--refresh` meaningful would have meant making `info`
+  cache-first, which is precisely what would stop it working as preflight's liveness check. The
+  docstring had asserted both the cache read and the refresh, and that wrong model had a cost: a
+  genuinely stale server was diagnosed as a stale cache, and answered by deleting a cache file when
+  the fix was a restart. It now says so.
+
 ## [0.7.0] - 2026-07-27
 
 builds land at true 1:1 — a scale gate that measures a plan against the real thing, native curved ops, five generators, and a viewer that scales with its world

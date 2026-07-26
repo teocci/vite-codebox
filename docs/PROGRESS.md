@@ -1,10 +1,11 @@
 # Progress
 
-**Current version:** 0.7.0
-**Active phase:** none — R2 shipped as `v0.7.0`, closing the six-phase plan that made builds land at
-true 1:1 scale and gave the model primitives that sculpt: P-7 (F-1, F-2), P-8 (I-7), P-9 (I-8), P-10
-(I-9), P-11 (I-10) and the retroactive P-12 (I-5, I-6). 483 tests: 91 vitest, 112 Go unit, 24 Go e2e,
-256 pytest (codeblox-builder, +1 skipped) — plus 54 pytest for the `dev-phase` skill family, which is
+**Current version:** 0.8.0
+**Active phase:** none — R3 shipped as `v0.8.0`: P-13 (F-3) and P-14 (I-11), two independent
+housekeeping phases that stopped two things lying. `world.py` no longer offers a refresh the CLI
+never accepted, and the shipped skill's `.codex/`/`.agents/` mirrors now fail a test when they drift
+instead of going quietly stale. 488 tests: 95 vitest, 112 Go unit, 24 Go e2e, 257 pytest
+(codeblox-builder, +1 skipped) — plus 54 pytest for the `dev-phase` skill family, which is
 chore-track tooling and is counted separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
@@ -33,28 +34,28 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 10 | SKILL.md: the authoring rule, the shape vocabulary, and the real part cost | done |
 | 11 | Make large world extents usable | done |
 | 12 | A build is a thing, to the skill and to the viewer (I-5, I-6) — retroactive, see `docs/PLAN.md` note 3 | done |
+| 13 | Stop world.py asking for a cache the CLI does not have | done |
+| 14 | Make the skill mirrors provable rather than remembered | done |
 
 ## Next action
 
-**No active plan.** R2 shipped as `v0.7.0` and `docs/PLAN.md` is back to its stub — the next plan
-starts with `dev-phase-start`. Three threads carried forward from that plan's handoff, none of them
-scheduled:
+**No active plan.** R3 shipped as `v0.8.0` and `docs/PLAN.md` is back to its stub — the next plan
+starts with `dev-phase-start`.
 
-The **`codeblox-builder` skill is still unmirrored** to `.codex/` and `.agents/`. Those two copies
-are stale with respect to P-7's changes in `world.py`/`submit.py`/`build.py`, P-9's in
-`build.py`/`world.py`/`doctor.py` and the new `dims.py`, and P-10's five generators. Wants an item,
-or a decision that the mirrors are not maintained.
+One thing R3 surfaced and deliberately did not act on: **`.agents/rules/` is orphaned.** Twelve
+tracked markdown files with no source anywhere in this repo — `.claude/` tracks only `settings.json`
+and `skills/` — and their names (`01-pre-implementation.md`, `02-javascript-style.md`, …) no longer
+match the global rule set they appear to have been copied from. `.codex/` carries no `rules/` at all,
+so the two hosts were never mirroring the same set. They cannot be synced from anything here, and
+they are stale by construction rather than by drift. Most likely they should be deleted; that was not
+I-11's call to make, since they look like personal content. Wants an explicit decision.
 
-**`builds/white-house.json` still predates the scale gate** — no `subject` declaration, so it has
-never been measured against the real building. `tesla-model-s.json` (305 parts) and
-`golden-gate-bridge.json` (386 parts, rebuilt during P-11 at 2737 m) both declare and pass. The
-bridge needs `world.extent: 1400`; the shipped default is 32.
-
-One unscheduled fix surfaced while verifying P-9 and has no item yet: `world.fetch`'s `--refresh` is
-not a flag `codeblox info` accepts, so a refresh is a usage error and preflight can report a stale
-cached contract with no way to force a re-fetch short of deleting the cache file. That is also what
-made a genuinely stale server (8 ops, no `ellipsoid`/`tube`) hard to distinguish from a stale cache
-during P-9; a restart resolved the server, and P-10 live-verified both ops.
+Not scheduled, and deliberately not a phase: **`builds/white-house.json` still predates the scale
+gate** — no `subject` declaration, so it has never been measured against the real building.
+`tesla-model-s.json` (305 parts) and `golden-gate-bridge.json` (386 parts, rebuilt during P-11 at
+2737 m) both declare and pass. `builds/` is gitignored, so rebuilding it changes no tracked file and
+cannot be a release-track item; it is work to do, not work to track. The bridge needs
+`world.extent: 1400`; the shipped default is 32.
 
 Longer-standing, and the only thread that changes what the product can do:
 
@@ -65,6 +66,52 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> Phase 14 (done): Made the skill mirrors provable rather than remembered, and closed R3 (I-11).
+> `codeblox-builder` ships to three agent hosts from one authored source, and the `.codex/` and
+> `.agents/` copies had gone stale after P-7, P-9 and P-10 — three times, silently, because a stale
+> mirror is indistinguishable from a fresh one until someone runs it. P-13 had just made it four. The
+> mechanism is two pieces and only one of them is the point: `scripts/sync-skills.mjs` copies the 18
+> source files and removes what the source no longer has, and `tests/skill-mirrors.test.js` fails when
+> a mirror differs. A sync script alone would have been a fourth manual step to forget; the test is
+> what converts "remember to sync" into "the suite goes red". Mapping the source first narrowed the
+> work twice: only `codeblox-builder` is mirrored (the `dev-phase-*` skills are chore-track tooling for
+> this repo's own workflow, never shipped to a host), and frontmatter is byte-identical across all
+> three copies, so the mirrors need no per-host adaptation and a plain copy plus equality check is
+> sufficient — had any host needed to differ, this approach would have been wrong. The mirrors stay
+> **committed** rather than generated-and-gitignored: ignoring them makes drift structurally
+> impossible, which is the stronger guarantee, but a mirror exists so another host can read the skill
+> straight from a checkout and a generated one is absent exactly when wanted. Both were three files
+> short (`dims.py`, `test_dims.py`, `test_doctor.py`) and ten behind. Verified as a mechanism, not an
+> assertion: the test was watched failing before the sync existed, then again on a deliberately
+> drifted line in `.codex/…/world.py` — naming that one path — then green after `1 written`; and
+> `pytest` against the `.codex` mirror passes 257, so the copies are usable rather than merely equal.
+> A `--check` mode was written and removed before finalizing, since `npm test` already asks that
+> question and a second path would be one more thing to keep honest. Left alone deliberately:
+> `.agents/rules/` is twelve tracked files with **no source in this repo** — orphaned rather than
+> drifted, and deleting what looks like personal content is not this item's call. 95 vitest, 488
+> total. Detail: `docs/improvements/I-11.md`.
+
+> Phase 13 (done, unreleased): Stopped `world.py` asking for a cache the CLI does not have (F-3).
+> `world.fetch(refresh=True)` sent `--refresh` to `codeblox info`, which rejects it — since I-1 made
+> an unknown flag a hard error rather than a silent no-op, every refresh was exit 2. The flag could
+> not simply be registered on the verb: `Info` calls `a.session(...)` directly and never reaches
+> `contractFromCache`, so `info` dials the server on every call and only *writes* the contract file.
+> `materials` is its only reader, which is why `materials` is the only verb the flag belongs on. Making
+> `--refresh` meaningful on `info` would have meant making `info` cache-first — and `info` dialling is
+> exactly what makes it `doctor.py`'s liveness check, so the "fix" would have broken preflight to
+> satisfy a flag with no caller. Deleted instead, at all three levels: parameter, argv, CLI flag. No
+> production caller was touched — `build.py`, `dims.py`, `doctor.py` and `submit.py` all call
+> `fetch(binary)` bare. The load-bearing half is the docstring, which had asserted both the cache read
+> and the refresh, and whose wrong model had already cost a misdiagnosis: P-9's genuinely stale server
+> was recorded as a stale cache and answered by hand-deleting a cache file, when the fix was a
+> restart. It now states that if the contract looks out of date the *server* is stale. The deleted
+> test is worth noting on its own — `test_refresh_is_passed_through` asserted `'--refresh' in argv`,
+> which only ever verified that the mock received what the code sent, never that the CLI would accept
+> it, so it stayed green for the whole life of the defect; its replacement asserts argv by equality,
+> which fails the moment an unaccepted argument is added. 257 pytest (+1 skipped), 484 total. This
+> also makes the `.codex/`/`.agents/` copies one change staler — P-14 is what closes that, and its
+> drift test would have caught this on landing. Detail: `docs/fixes/F-3.md`.
 
 > Phase 11 (done): Made a large `world.extent` actually usable, and closed R2 (I-10). P-9's scale
 > gate answers an oversized subject by naming the extent that would hold it at 1:1 — but the viewer

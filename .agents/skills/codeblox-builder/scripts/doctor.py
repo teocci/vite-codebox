@@ -70,13 +70,21 @@ def check_world(binary: str) -> dict:
 
     view = world.digest(contract)
     bounds = view['bounds']
+    # Preflight has the contract in hand and is the first thing anything runs, so
+    # it is the cheapest place to learn the scale. Reporting only blocks is what
+    # left "a block is a metre" as the standing assumption downstream.
+    per_metre = view.get('blocksPerMetre')
+    scale = f"block {view['blockLabel']}"
+    if per_metre:
+        scale += f" = {per_metre:g} blocks per metre"
     return {
         'name': 'world', 'ok': True,
-        'detail': (f"{view['materialCount']} materials, ops "
+        'detail': (f"{scale}; {view['materialCount']} materials, ops "
                    f"{', '.join(sorted(view['ops']))}; "
                    f"y {bounds['y'][0]}..{bounds['y'][1]}, "
                    f"x/z ±{bounds['x'][1]} blocks"),
         'bounds': bounds,
+        'blocksPerMetre': per_metre,
     }
 
 
