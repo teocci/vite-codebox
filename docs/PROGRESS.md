@@ -1,11 +1,11 @@
 # Progress
 
-**Current version:** 0.6.0
-**Active phase:** P-11 — the last row of a five-phase plan to make builds land at true 1:1 scale and
-give the model primitives that sculpt. P-7 (F-1, F-2), P-8 (I-7), P-9 (I-8), P-10 (I-9) and P-12
-(I-5, I-6) are `done` and unreleased; **P-11 closes R2 and ships all of them as one minor**. 466
-tests: 74 vitest, 112 Go unit, 24 Go e2e, 256 pytest (codeblox-builder, +1 skipped) — plus 54 pytest
-for the `dev-phase` skill family, which is chore-track tooling and is counted separately.
+**Current version:** 0.7.0
+**Active phase:** none — R2 shipped as `v0.7.0`, closing the six-phase plan that made builds land at
+true 1:1 scale and gave the model primitives that sculpt: P-7 (F-1, F-2), P-8 (I-7), P-9 (I-8), P-10
+(I-9), P-11 (I-10) and the retroactive P-12 (I-5, I-6). 483 tests: 91 vitest, 112 Go unit, 24 Go e2e,
+256 pytest (codeblox-builder, +1 skipped) — plus 54 pytest for the `dev-phase` skill family, which is
+chore-track tooling and is counted separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -31,19 +31,24 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 8 | Native ellipsoid and tube ops | done |
 | 9 | The scale gate — declared subject dimensions, checked before send | done |
 | 10 | SKILL.md: the authoring rule, the shape vocabulary, and the real part cost | done |
-| 11 | Make large world extents usable | planned |
+| 11 | Make large world extents usable | done |
 | 12 | A build is a thing, to the skill and to the viewer (I-5, I-6) — retroactive, see `docs/PLAN.md` note 3 | done |
 
 ## Next action
 
-**P-11 (I-10) is the only phase left, and it closes R2** — derive the camera's far plane and the
-grid step from the world extent, plus a logarithmic depth buffer. Finishing it means
-`dev-phase-complete` **Part A and Part B**: the release bumps `package.json` *and* the Go
-`command.Version`, stamps five phases and six items, and cuts `v0.7.0`. Read the Part B notes in
-`docs/PLAN.md` first — there are two version sites and one retroactive phase.
+**No active plan.** R2 shipped as `v0.7.0` and `docs/PLAN.md` is back to its stub — the next plan
+starts with `dev-phase-start`. Three threads carried forward from that plan's handoff, none of them
+scheduled:
 
-P-11 has a number waiting for it: I-8's oversized-subject envelope asks for `world.extent` ≥ 1368.5
-to hold the Golden Gate at 1:1, which is where the planned `extent 1400` comes from.
+The **`codeblox-builder` skill is still unmirrored** to `.codex/` and `.agents/`. Those two copies
+are stale with respect to P-7's changes in `world.py`/`submit.py`/`build.py`, P-9's in
+`build.py`/`world.py`/`doctor.py` and the new `dims.py`, and P-10's five generators. Wants an item,
+or a decision that the mirrors are not maintained.
+
+**`builds/white-house.json` still predates the scale gate** — no `subject` declaration, so it has
+never been measured against the real building. `tesla-model-s.json` (305 parts) and
+`golden-gate-bridge.json` (386 parts, rebuilt during P-11 at 2737 m) both declare and pass. The
+bridge needs `world.extent: 1400`; the shipped default is 32.
 
 One unscheduled fix surfaced while verifying P-9 and has no item yet: `world.fetch`'s `--refresh` is
 not a flag `codeblox info` accepts, so a refresh is a usage error and preflight can report a stale
@@ -60,6 +65,36 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> Phase 11 (done): Made a large `world.extent` actually usable, and closed R2 (I-10). P-9's scale
+> gate answers an oversized subject by naming the extent that would hold it at 1:1 — but the viewer
+> carried three literals tuned for the 64 m world that shipped, so that advice was false past about a
+> kilometre. The far plane was the defect and it was arithmetic, not opinion: at a fixed 5000 m, a
+> 2737 m span sits at a fit distance of ~4224 m with its far corner at ~5597 m, and clipped. The fix
+> was not a larger constant. `maxOrbit` (twelve extents) is handed to OrbitControls as `maxDistance`,
+> and the far plane is that cap plus the buildable box's half-diagonal — so nothing can be further
+> from the camera than a distance the camera is forbidden to reach, which turns "the world never clips
+> away" from generosity into a guarantee. The near plane stopped being a trade rather than being
+> rebalanced: a near that tracks far at a fixed ratio needs clamping at both ends, and every clamp is
+> a scale at which it is wrong, so `logarithmicDepthBuffer` carries the precision and near is simply
+> one block everywhere. The grid was a legibility problem, not a geometry one — what matters is cell
+> *count* — so `gridStepFor` climbs a 1-2-5 ladder holding the floor near 64 divisions, keeping the
+> number round (a derived 43.75 m cell is legible to nobody, 50 m is), and `gridStep: auto` is the new
+> default. All four are **pure functions of the extent**, not getters reading config, which is why the
+> suite exercises seven extents from 1 m to 5000 m and passes identically at 32 and at 1400 — and why
+> the tests assert invariants (far exceeds cap plus half-diagonal; grid holds 25–70 divisions across
+> four decades) instead of restating the formulas. A pre-existing test was coupled the same way the
+> viewer was, asserting a literal 4000-block box out of bounds — true only at `extent: 32`; it now
+> derives from `WORLD.boundBlocks`. `extent` itself stays **32**: raising it is the point of the
+> phase, but shipping the maximum as the default would put a 5 m car on a 50 m grid inside a 2.8 km
+> floor, trading the case everyone builds for one nobody builds by default. Live-verified by
+> rebuilding `builds/golden-gate-bridge.json` at true 1:1 in an `extent: 1400` world — 2737 m end to
+> end, 1280 m main span, 227 m towers, 143 m sag, 386 parts; no clipping at either deck end, 50 m grid
+> at 56 divisions, no z-fighting across 256 cable segments. The first attempt at that subject put the
+> towers at ±1280 m instead of ±640 m — 1280 m is the *main span*, not the half-length — which is a
+> reminder that a render-envelope probe still has to be the right shape to be read. One behaviour
+> change: the reviewer can no longer dolly past twelve extents (384 m at the default), where before
+> the far plane allowed 5000 m at any extent. Detail: `docs/improvements/I-10.md`.
 
 > P-10 (done, unreleased): The skill stops teaching the error, and gets the shapes it was telling the
 > model to hand-build (I-9). Two halves. First, `SKILL.md` did not merely fail to warn that a block is

@@ -1,10 +1,10 @@
 # Phase 7 — Close the two silent holes under the scale gate
 
 - **Phase ID:** 7
-- **Version:** (pending)
-- **Date:** (pending)
-- **Tests:** (pending)
-- **Status:** 🚧 IN PROGRESS
+- **Version:** 0.7.0
+- **Date:** 2026-07-27
+- **Tests:** 483
+- **Status:** ✅ DONE (483 tests; live-verified).
 
 ## Objective
 

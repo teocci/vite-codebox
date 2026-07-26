@@ -1,6 +1,6 @@
 import { Vector3, MathUtils } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { BLOCK_SIZE } from '@codeblox/shared/config.js'
+import { BLOCK_SIZE, WORLD } from '@codeblox/shared/config.js'
 
 const PADDING = 1.3
 const MIN_RADIUS_METRES = 1.0 // frame an empty/tiny world to something sensible
@@ -39,6 +39,9 @@ export default class CameraDirector {
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.09
     this.controls.autoRotateSpeed = 1.1
+    // The far plane is derived from this cap, so honouring it here is what makes
+    // "the world never clips away" true rather than merely likely.
+    this.controls.maxDistance = WORLD.maxOrbit
 
     this._center = new Vector3()
     this._dir = new Vector3()

@@ -1,10 +1,10 @@
 # Phase 12 — A build is a thing, to the skill and to the viewer
 
 - **Phase ID:** 12
-- **Version:** (pending)
-- **Date:** (pending)
-- **Tests:** (pending)
-- **Status:** 🚧 IN PROGRESS
+- **Version:** 0.7.0
+- **Date:** 2026-07-27
+- **Tests:** 483
+- **Status:** ✅ DONE (483 tests; live-verified).
 
 ## Objective
 

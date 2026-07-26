@@ -1,10 +1,10 @@
 # Phase 9 — The scale gate — declared subject dimensions, checked before send
 
 - **Phase ID:** 9
-- **Version:** (pending)
-- **Date:** (pending)
-- **Tests:** (pending)
-- **Status:** 🚧 IN PROGRESS
+- **Version:** 0.7.0
+- **Date:** 2026-07-27
+- **Tests:** 483
+- **Status:** ✅ DONE (483 tests; live-verified).
 
 ## Objective
 

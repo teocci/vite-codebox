@@ -12,11 +12,19 @@ blockSize: 0.02
 
 world:
   # World half-extent, in METRES (not blocks). Sets the floor size and the build
-  # bounds, independent of blockSize. 32 -> a 64 x 64 m world.
+  # bounds, independent of blockSize. 32 -> a 64 x 64 m world, which suits the
+  # common case (a vehicle, a house) and keeps the floor grid at a legible 1 m.
+  #
+  # Raising this is supported: the camera planes, the orbit cap and the grid step
+  # all derive from it, so a kilometre-scale world renders correctly rather than
+  # clipping at a fixed far plane. When the scale gate refuses an oversized
+  # subject it names the extent that would hold it at 1:1 — set that number here.
+  # A 1:1 Golden Gate (2737 m end to end) needs 1400.
   extent: 32
-  # Floor grid line spacing, in METRES. A human-readable reference (1 m cells),
-  # separate from the finer block quantum.
-  gridStep: 1
+  # Floor grid line spacing, in METRES — a human reference, separate from the
+  # finer block quantum. 'auto' picks a round 1-2-5 cell that keeps the grid at
+  # roughly 64 cells across at any extent; pin a number to override.
+  gridStep: auto
 
 # --- the two servers `npm start` runs ---------------------------------------
 

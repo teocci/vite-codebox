@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK_SIZE, metres, blockLabel, WORLD } from '@codeblox/shared/config.js'
+import {
+  BLOCK_SIZE, metres, blockLabel, WORLD,
+  gridStepFor, cameraPlanesFor, cameraStartFor, resolveGridStep,
+} from '@codeblox/shared/config.js'
 import {
   MATERIALS, MATERIAL_NAMES, MATERIAL_FAMILIES, isMaterial, materialColor, materialFamily,
 } from '@codeblox/shared/materials.js'
@@ -17,6 +20,104 @@ describe('config', () => {
   it('derives block bounds from the metre extent', () => {
     expect(WORLD.boundBlocks).toBe(Math.round(WORLD.extent / BLOCK_SIZE))
     expect(WORLD.heightBlocks).toBe(Math.round((WORLD.extent * 2) / BLOCK_SIZE))
+  })
+})
+
+describe('grid step derivation', () => {
+  it('keeps the 1 m cell a 32 m world already had', () => {
+    expect(gridStepFor(32)).toBe(1)
+  })
+  it('climbs the 1-2-5 ladder so a kilometre world is not 2800 cells across', () => {
+    expect(gridStepFor(1400)).toBe(50)
+    expect(gridStepFor(100)).toBe(5)
+    expect(gridStepFor(640)).toBe(20)
+  })
+  it('descends below a metre for a room-sized world', () => {
+    expect(gridStepFor(1)).toBeCloseTo(0.05)
+  })
+  it('holds the cell count in a readable band across four decades of extent', () => {
+    for (const extent of [1, 10, 32, 100, 640, 1400, 5000]) {
+      const divisions = (extent * 2) / gridStepFor(extent)
+      expect(divisions).toBeGreaterThanOrEqual(25)
+      expect(divisions).toBeLessThanOrEqual(70)
+    }
+  })
+})
+
+describe('camera plane derivation', () => {
+  const EXTENTS = [1, 32, 100, 640, 1400, 5000]
+
+  it('keeps the whole world inside the far plane at maximum orbit', () => {
+    // The guarantee that makes a big extent usable: the user cannot dolly to a
+    // distance where the far corner of the world clips away.
+    for (const extent of EXTENTS) {
+      const { far, maxOrbit } = cameraPlanesFor(extent)
+      expect(far).toBeGreaterThan(maxOrbit + extent * Math.sqrt(3))
+    }
+  })
+  it('pushes the far plane past the 5000 that clipped a kilometre world', () => {
+    expect(cameraPlanesFor(1400).far).toBeGreaterThan(5000)
+  })
+  it('never moves the near plane further out than the 0.1 it used to be', () => {
+    for (const extent of EXTENTS) {
+      expect(cameraPlanesFor(extent).near).toBeLessThanOrEqual(0.1)
+    }
+  })
+  it('holds the near plane at one block at every extent', () => {
+    // A logarithmic depth buffer carries the precision, so near no longer has to
+    // be traded against far: it can just be the finest thing that exists.
+    for (const extent of EXTENTS) {
+      expect(cameraPlanesFor(extent).near).toBe(BLOCK_SIZE)
+    }
+  })
+  it('improves on the depth ratio the fixed planes gave a 32 m world', () => {
+    const { near, far } = cameraPlanesFor(32)
+    expect(far / near).toBeLessThan(5000 / 0.1)
+  })
+})
+
+describe('opening camera position', () => {
+  it('reproduces the framing a 32 m world opened on', () => {
+    const [x, y, z] = cameraStartFor(32)
+    expect(x).toBeCloseTo(42)
+    expect(y).toBeCloseTo(32)
+    expect(z).toBeCloseTo(54)
+  })
+  it('opens outside the world rather than buried inside it', () => {
+    // The fixed 75 m position put a 1400 m world's opening camera below the
+    // floor grid, looking at nothing.
+    for (const extent of [1, 32, 1400, 5000]) {
+      const [x, y, z] = cameraStartFor(extent)
+      expect(Math.hypot(x, y, z)).toBeGreaterThan(extent)
+    }
+  })
+  it('stays within the orbit cap it will be clamped to', () => {
+    for (const extent of [1, 32, 1400, 5000]) {
+      const [x, y, z] = cameraStartFor(extent)
+      expect(Math.hypot(x, y, z)).toBeLessThan(cameraPlanesFor(extent).maxOrbit)
+    }
+  })
+})
+
+describe('WORLD resolves the derived values for the configured extent', () => {
+  it('lets an explicit gridStep override the ladder', () => {
+    expect(resolveGridStep(2, 1400)).toBe(2)
+  })
+  it('derives the gridStep when the config says auto', () => {
+    expect(resolveGridStep('auto', 1400)).toBe(50)
+  })
+  it('exposes a resolved numeric gridStep, never the literal auto', () => {
+    expect(typeof WORLD.gridStep).toBe('number')
+    expect(Number.isFinite(WORLD.gridStep)).toBe(true)
+  })
+  it('exposes camera planes and the orbit cap for the configured extent', () => {
+    const { near, far, maxOrbit } = cameraPlanesFor(WORLD.extent)
+    expect(WORLD.nearPlane).toBeCloseTo(near)
+    expect(WORLD.farPlane).toBeCloseTo(far)
+    expect(WORLD.maxOrbit).toBeCloseTo(maxOrbit)
+  })
+  it('exposes the opening camera position for the configured extent', () => {
+    expect(WORLD.cameraStart).toEqual(cameraStartFor(WORLD.extent))
   })
 })
 
@@ -62,7 +163,10 @@ describe('protocol.validate', () => {
   it('rejects out-of-bounds parts', () => {
     const below = validate({ op: 'box', at: [0, -5, 0], size: [1, 1, 1], mat: 'oak' })
     expect(below.ok).toBe(false)
-    const wide = validate({ op: 'box', at: [0, 0, 0], size: [4000, 1, 1], mat: 'oak' })
+    // Derived from the configured bound, not a literal: a fixed magnitude only
+    // reads as "out of bounds" for the one extent it was written against.
+    const tooWide = WORLD.boundBlocks * 4
+    const wide = validate({ op: 'box', at: [0, 0, 0], size: [tooWide, 1, 1], mat: 'oak' })
     expect(wide.ok).toBe(false)
   })
   it('validates sphere and cylinder', () => {

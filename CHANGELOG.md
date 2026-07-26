@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-27
+
+builds land at true 1:1 — a scale gate that measures a plan against the real thing, native curved ops, five generators, and a viewer that scales with its world
+
 ### Added
 
 - I-9: Five shape generators — `wheel`, `taper`, `dome`, `pane` and `window`. Two of them close gaps
@@ -50,6 +54,22 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- I-10: The viewer's camera derives its near plane, far plane and opening position from
+  `world.extent` rather than carrying three literals tuned for a 64 m world. The far plane was a
+  fixed 5000 m, which made the scale gate's own advice — "raise `extent` and this subject fits at
+  1:1" — false past about a kilometre: a 2737 m span sits at a fit distance of ~4224 m with its far
+  corner at ~5597 m, and clipped. Rather than pick a larger constant, the far plane is now derived
+  from an explicit orbit cap, handed to the controls as `maxDistance`, plus the buildable box's
+  half-diagonal — so nothing can be further from the camera than a distance the camera is not
+  allowed to reach. A logarithmic depth buffer carries the precision across that range, which
+  removes the near/far trade rather than rebalancing it: the near plane is simply one block at every
+  extent. The reviewer can no longer dolly past twelve extents, which is the cap the guarantee rests
+  on.
+- I-10: `world.gridStep` accepts `auto` — now the default — and derives a round 1-2-5 cell that
+  holds the floor grid near 64 divisions at any extent. Pinned at 1 m it drew 2800 divisions in a
+  1400 m world and read as a solid grey sheet, and what matters for a reference grid is the cell
+  count rather than the cell size. A 32 m world still gets exactly the 1 m cell it always had, and a
+  pinned number still overrides.
 - I-9: The `codeblox-builder` skill no longer teaches that a block is a metre by worked example. Its
   castle was 40 blocks across — 80 cm — and its proportion advice recommended a 16 cm bridge deck;
   both are replaced by an example that declares its real size and was built before being documented.

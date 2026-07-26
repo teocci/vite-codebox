@@ -31,10 +31,13 @@ export default class Viewer {
     this.scene = new Scene()
     this.scene.background = readBg()
 
-    this.camera = new PerspectiveCamera(50, this._aspect(), 0.1, 5000)
-    this.camera.position.set(42, 32, 54)
+    this.camera = new PerspectiveCamera(50, this._aspect(), WORLD.nearPlane, WORLD.farPlane)
+    this.camera.position.set(...WORLD.cameraStart)
 
-    this.renderer = new WebGLRenderer({ antialias: true })
+    // Logarithmic depth: the near/far span is a function of world extent, so at a
+    // kilometre scale it is wide enough that a conventional depth buffer would
+    // z-fight. This spends precision evenly across the range instead.
+    this.renderer = new WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(this._w(), this._h())
     this.renderer.toneMapping = ACESFilmicToneMapping

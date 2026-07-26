@@ -21,7 +21,8 @@ const raw = existsSync(yamlPath) ? (load(readFileSync(yamlPath, 'utf8')) ?? {}) 
 const values = {
   blockSize: raw.blockSize ?? 0.02,
   extent: raw.world?.extent ?? 32,
-  gridStep: raw.world?.gridStep ?? 1,
+  // 'auto' (the default) means "derive from extent" — resolved by shared/config.js.
+  gridStep: raw.world?.gridStep ?? 'auto',
   web: {
     host: raw.web?.host ?? 'localhost',
     port: raw.web?.port ?? 5173,
