@@ -11,7 +11,10 @@
       "Bash(go vet *)",
       "Bash(gofmt -l *)",
       "Read(//c/Users/teocci/.claude/plans/**)",
-      "Read(//c/Users/teocci/.codeblox/**)"
+      "Read(//c/Users/teocci/.codeblox/**)",
+      "Bash(python -c ' *)",
+      "Bash(node -e ' *)",
+      "Bash(echo \"exit=$?\")"
     ]
   }
 }

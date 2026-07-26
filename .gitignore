@@ -64,3 +64,4 @@ clients/codeblox/bin/
 # Server auth token (generated at runtime)
 .codeblox/
 builds/
+video/
