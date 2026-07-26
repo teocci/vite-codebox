@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- I-9: Five shape generators — `wheel`, `taper`, `dome`, `pane` and `window`. Two of them close gaps
+  the skill previously described in prose and left as arithmetic: `window` composes a wall around an
+  opening (sill, head, two jambs, optional glazing) because nothing in this engine subtracts, and
+  `pane` builds raked glazing — a windshield, a backlight, a skylight — as a stack of thin slabs,
+  because no part is ever rotated and a leaning surface cannot be a leaning box. The remaining three
+  give the native ops something to be used by: `wheel` is a `tube` with a hub, `dome` an `ellipsoid`
+  half-buried in what it sits on, `taper` the spire and hull shape `shell` cannot express.
 - I-8: A build plan can declare the real size of its subject — `subject.mm`, in millimetres, in the
   protocol's own `x, y, z` — and the plan is measured against that declaration before the first block
   is sent. Every man-made build in the repo had landed at 15-26% of true size with nothing to notice:
@@ -43,6 +50,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- I-9: The `codeblox-builder` skill no longer teaches that a block is a metre by worked example. Its
+  castle was 40 blocks across — 80 cm — and its proportion advice recommended a 16 cm bridge deck;
+  both are replaced by an example that declares its real size and was built before being documented.
+  Its cost guidance was also simply wrong: "forty boxes are 40x the cost of one" ignores that the
+  renderer keeps one instanced mesh per geometry-kind-and-render-family and colours instances
+  individually, so the entire world is at most twenty draw calls however many parts it holds. The
+  guidance now says what actually costs — every instance is submitted each frame, visible or not —
+  and stops steering away from the many-part forms curved and raked shapes need.
 - I-8: The metre is now reported everywhere the block already was. `codeblox info`'s digest derives
   how many blocks span a metre, preflight states it on the rung that already had the contract in hand,
   and each stage of a build reports what it landed in metres as well as in parts. The conversion is

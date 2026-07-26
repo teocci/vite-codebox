@@ -72,6 +72,11 @@ SHAPES = {
     'stairs': shapes.stairs,
     'arch': shapes.arch,
     'bridge': shapes.bridge,
+    'wheel': shapes.wheel,
+    'taper': shapes.taper,
+    'dome': shapes.dome,
+    'pane': shapes.pane,
+    'window': shapes.window,
 }
 
 # How far a built axis may sit from the size its subject declares. The one-block

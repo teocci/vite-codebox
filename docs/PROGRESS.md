@@ -1,12 +1,11 @@
 # Progress
 
 **Current version:** 0.6.0
-**Active phase:** P-10 and P-11 — a five-phase plan to make builds land at true 1:1 scale and give
-the model primitives that sculpt. P-7 (F-1, F-2), P-8 (I-7), P-9 (I-8) and P-12 (I-5, I-6) are `done`
-and unreleased; R2 closes with P-11 and ships all of them together. P-10 and P-11 are independent and
-can run in parallel. 420 tests: 74 vitest, 112 Go unit, 24 Go e2e, 210 pytest (codeblox-builder, +1
-skipped) — plus 54 pytest for the `dev-phase` skill family, which is chore-track tooling and is
-counted separately.
+**Active phase:** P-11 — the last row of a five-phase plan to make builds land at true 1:1 scale and
+give the model primitives that sculpt. P-7 (F-1, F-2), P-8 (I-7), P-9 (I-8), P-10 (I-9) and P-12
+(I-5, I-6) are `done` and unreleased; **P-11 closes R2 and ships all of them as one minor**. 466
+tests: 74 vitest, 112 Go unit, 24 Go e2e, 256 pytest (codeblox-builder, +1 skipped) — plus 54 pytest
+for the `dev-phase` skill family, which is chore-track tooling and is counted separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -31,20 +30,26 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 7 | Close the two silent holes under the scale gate | done |
 | 8 | Native ellipsoid and tube ops | done |
 | 9 | The scale gate — declared subject dimensions, checked before send | done |
-| 10 | SKILL.md: the authoring rule, the shape vocabulary, and the real part cost | planned |
+| 10 | SKILL.md: the authoring rule, the shape vocabulary, and the real part cost | done |
 | 11 | Make large world extents usable | planned |
 | 12 | A build is a thing, to the skill and to the viewer (I-5, I-6) — retroactive, see `docs/PLAN.md` note 3 | done |
 
 ## Next action
 
-**P-10 (I-9) and P-11 (I-10) are both unblocked and independent** — P-10 needs P-8 and P-9, P-11
-needs P-9, and all are `done`. They can run in parallel, in separate sessions. R2 closes with P-11
-and ships P-7, P-8, P-9, P-11 and P-12 together as one minor.
+**P-11 (I-10) is the only phase left, and it closes R2** — derive the camera's far plane and the
+grid step from the world extent, plus a logarithmic depth buffer. Finishing it means
+`dev-phase-complete` **Part A and Part B**: the release bumps `package.json` *and* the Go
+`command.Version`, stamps five phases and six items, and cuts `v0.7.0`. Read the Part B notes in
+`docs/PLAN.md` first — there are two version sites and one retroactive phase.
 
-Two unscheduled fixes surfaced while verifying P-9, neither with an item yet: `world.fetch`'s
-`--refresh` is not a flag `codeblox info` accepts, so a refresh is a usage error and preflight can
-report a stale cached contract; and the running ws server is stale, publishing 8 ops without P-8's
-`ellipsoid` and `tube` even though both are committed.
+P-11 has a number waiting for it: I-8's oversized-subject envelope asks for `world.extent` ≥ 1368.5
+to hold the Golden Gate at 1:1, which is where the planned `extent 1400` comes from.
+
+One unscheduled fix surfaced while verifying P-9 and has no item yet: `world.fetch`'s `--refresh` is
+not a flag `codeblox info` accepts, so a refresh is a usage error and preflight can report a stale
+cached contract with no way to force a re-fetch short of deleting the cache file. That is also what
+made a genuinely stale server (8 ops, no `ellipsoid`/`tube`) hard to distinguish from a stale cache
+during P-9; a restart resolved the server, and P-10 live-verified both ops.
 
 Longer-standing, and the only thread that changes what the product can do:
 
@@ -55,6 +60,35 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> P-10 (done, unreleased): The skill stops teaching the error, and gets the shapes it was telling the
+> model to hand-build (I-9). Two halves. First, `SKILL.md` did not merely fail to warn that a block is
+> 2 cm — it *demonstrated* the opposite: a castle `size [40,14,40]` is 80 cm, and the proportion advice
+> recommended a 16 cm bridge deck. A worked example outranks a caveat, and after P-9 the cost of
+> leaving them changed in kind, because the documentation now led the model into a refusal the
+> documentation could not explain. Both are replaced by a 6 m pavilion that declares `subject.mm`, and
+> every command in the file was executed before being written down — which is how the `pane` example
+> was caught emitting 116 parts for one windshield. The metre value stays out of the prose: the file's
+> own rule is that runtime values come from the server, so it points at `blocksPerMetre` and
+> `dims.py to-blocks`. Second, the cost model was false and measurably so: `addPart` keys layers as
+> `kind:family` on the *render family* with per-instance colour, so forty boxes of forty different
+> opaque materials are **one** draw call, and with five geometry kinds and four families the whole
+> world is bounded at twenty draw calls at any part count. What costs is an instance slot plus
+> `frustumCulled = false`, so every instance is submitted each frame whether on screen or not; and
+> after F-1's `SetReadLimit(-1)` there is no protocol ceiling either. So the advice inverts — part
+> count is cheap, and the curved and raked forms this phase adds *need* many parts. Five generators
+> close the gap between what the skill told the model to do and what it gave it to do it with:
+> `wheel` (a `tube` with a hub standing proud, since flush it is invisible), `taper` (spires and
+> hulls, heights distributed by integer division so no slab is zero-tall and consecutive slabs share a
+> face exactly), `dome` (an `ellipsoid` of twice the rise, half buried, refusing a base that cannot
+> clear it), `window` (a wall composed around an opening, omitting zero-sized pieces so a door and a
+> shopfront are the same generator) and `pane`. `pane` is the load-bearing one and is forced by the
+> renderer: `_compose` uses `IDENTITY_QUAT`, so nothing is ever rotated and a raked surface must be a
+> staircase of thin slabs — the rebuilt Tesla spends 178 of its 305 parts stepping exactly that by
+> hand. Its frame is *inset* into the glazing rather than added around it, so framing cannot grow a
+> build past its declared subject and trip P-9's gate over a cosmetic choice; and it caps both ends,
+> which was only discovered by looking at the render — framing the long rails alone left bare glass at
+> each end and read as two loose strips. Detail: `docs/improvements/I-9.md`, `docs/phases/phase-10.md`.
 
 > P-9 (done, unreleased): The scale gate (I-8). Every man-made build in `builds/` had landed at
 > 15-26% of true size — the Tesla is 1.16 m against a real 4.97 m, the Golden Gate 22.4 m against

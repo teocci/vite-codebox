@@ -7,7 +7,7 @@
 | P-7 | F-1, F-2 | — | R2 | (pending) | done |
 | P-8 | I-7 | P-7 | R2 | (pending) | done |
 | P-9 | I-8 | P-7 | R2 | (pending) | done |
-| P-10 | I-9 | P-8, P-9 | R2 | (pending) | pending |
+| P-10 | I-9 | P-8, P-9 | R2 | (pending) | done |
 | P-11 | I-10 | P-9 | R2 | (pending) | pending |
 | P-12 | I-5, I-6 | — | R2 | (pending) | done |
 
@@ -18,9 +18,9 @@ P-7, P-8 and P-12 are implemented, tested, documented and **committed on `main`*
 then collapsed into R2, so everything ships together as one minor (`v0.7.0`) when P-11 closes the
 group. The tag is still `v0.6.0` and `[Unreleased]` carries the bullets.
 
-P-9 is **done** and unreleased with the rest. P-10 and P-11 are now a **parallel wave** — P-10 needs
-P-8 and P-9, P-11 needs P-9, and both are satisfied — so they are independent and can run in separate
-sessions. The full design for both is in the approved plan and in the `I-9` / `I-10` stubs.
+P-9 and P-10 are **done** and unreleased with the rest. **P-11 is the last row, and it closes R2** —
+so finishing it runs `dev-phase-complete` Part A *and* Part B, cutting `v0.7.0` across five phases
+(P-7, P-8, P-9, P-10, P-11) and six items. Read the Part B notes below before starting it.
 
 P-11 has a number waiting for it: I-8's oversized-subject envelope asks for `world.extent` ≥ 1368.5
 to hold the Golden Gate at 1:1, which is where P-11's `extent 1400` comes from.
@@ -73,10 +73,19 @@ banner removed. Two things it surfaced are **not** fixed and have no item yet:
   (`flag provided but not defined: -refresh`). So a refresh is a usage error and `doctor.py` can
   report a **stale cached contract** — the cache at `~/.codeblox/world_info.json` had to be deleted
   by hand to re-fetch. Wants a fix item.
-- The running ws server is **stale**: a fresh fetch published only 8 ops, without P-8's `ellipsoid`
-  and `tube`, though both are committed in `packages/shared/protocol.js`. Restart is all it needs,
-  but I-7 has therefore not been live-verified against a server built from its own code.
+- ~~The running ws server is stale, publishing 8 ops without P-8's `ellipsoid` and `tube`.~~
+  **Resolved during P-10** — after a restart the server publishes all 10 ops, and both were then
+  live-verified by building through the new `tube`/`ellipsoid` generators. Worth knowing as a
+  symptom rather than a bug: a stale server is indistinguishable from a stale *cache* from the
+  outside, and the `--refresh` defect above is what makes telling them apart hard.
 
 The `codeblox-builder` skill has not been mirrored to `.codex/` or `.agents/`, so those two copies
 are stale with respect to the P-7 changes in `world.py`, `submit.py` and `build.py` — and now the
 P-9 changes in `build.py`, `world.py`, `doctor.py` and the new `dims.py`.
+
+`builds/` has moved on since P-9 was written: `tesla-model-s.json` was rebuilt at true 1:1 (305
+parts, declared `subject`, `tube` wheels) and passes the scale gate, while `bear.json` and
+`car.json` are gone. Only `golden-gate-bridge.json` and `white-house.json` still predate the gate.
+The rebuild is also the evidence for P-10's glazing generators: its `greenhouse` stage is 178 of
+its 305 parts, hand-stepped 4x3x3 boxes, because a raked pane cannot be a rotated box — `_compose`
+is `IDENTITY_QUAT`, so nothing is ever rotated and the rake has to be stepped.
