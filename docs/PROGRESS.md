@@ -1,9 +1,10 @@
 # Progress
 
 **Current version:** 0.6.0
-**Active phase:** none — **v0.6.0 released**, closing the plan. P-6 split `App` along its two domains
-(I-4), the hygiene item deferred past P-5. 298 tests: 59 vitest, 111 Go unit, 24 Go e2e, 104 pytest
-(skill).
+**Active phase:** P-9 — a five-phase plan to make builds land at true 1:1 scale and give the model
+primitives that sculpt. P-7 (F-1, F-2), P-8 (I-7) and P-12 (I-5, I-6) are `done` and unreleased;
+R2 closes with P-11 and ships all of them together. 372 tests: 74 vitest, 112 Go unit, 24 Go e2e, 162 pytest (codeblox-builder) — plus 31
+pytest for the `dev-phase` skill family, which no previous total counted.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -25,6 +26,12 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 4 | Schema-driven build verbs — info, exec, and the ergonomic forms | done |
 | 5 | codeblox-builder agent skill (carries I-1, I-3, I-2) | done |
 | 6 | Split `App` along its two domains | done |
+| 7 | Close the two silent holes under the scale gate | done |
+| 8 | Native ellipsoid and tube ops | done |
+| 9 | The scale gate — declared subject dimensions, checked before send | planned |
+| 10 | SKILL.md: the authoring rule, the shape vocabulary, and the real part cost | planned |
+| 11 | Make large world extents usable | planned |
+| 12 | A build is a thing, to the skill and to the viewer (I-5, I-6) — retroactive, see `docs/PLAN.md` note 3 | done |
 
 ## Next action
 
@@ -38,6 +45,74 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> P-8 (done, unreleased): Two new part ops, `ellipsoid` and `tube` (I-7). The model had been using
+> `sphere` for car wheels, bear paws and human hands — `builds/bear.json` is 17 spheres out of 17
+> parts — and that is the correct choice from a wrong menu: `World._compose` composes every instance
+> with `IDENTITY_QUAT`, so nothing is ever rotated and `cylinder` is y-axis only, making a car wheel
+> (a cylinder about x) unbuildable; `sphere.r` is a scalar, so a squashed sphere — what a paw or a
+> hood actually is — was equally unavailable. Both additions exploit capability the renderer already
+> had. `ellipsoid` returns `kind: 'sphere'` because the instance matrix already applies a fully
+> non-uniform scale, so it reuses the existing geometry *and* its `InstancedMesh` — no new draw call,
+> eight lines of protocol, zero renderer. `tube` bakes its orientation into the vertex buffer
+> (`rotateZ`/`rotateX` at construction) rather than rotating at runtime, so `_compose` stays identity
+> and the permuted size **is** the world AABB — which is the point: no conservative-bounds arithmetic
+> enters `protocol.js`, `World.js`, or `world.py`. Both are new **ops**, not new fields, and that is
+> forced rather than stylistic: `contract.go:139-148` errors on any declared field absent from a
+> command, so adding `axis` to `cylinder` would have broken all 23 cylinders already in `builds/`. A
+> general rotation field was declined (for a box or ellipsoid a 90° turn is the same shape with a
+> permuted size; arbitrary rotation ends the integer-block invariant in four places), and so was a
+> native `wedge` — a suspension cable is a catenary, not a ramp, and at 253 blocks a stepped roofline
+> has 8 cm risers, so fixing the scale removes most of what motivates one. Detail:
+> `docs/improvements/I-7.md`.
+
+> P-7 (done, unreleased): Two silent holes closed before the scale work could rest on them, both
+> found while planning rather than by hitting them. **F-1**: the CLI's welcome frame carries the whole
+> world snapshot and `transport` never called `SetReadLimit`, so `coder/websocket`'s 32 KiB default
+> capped the world at ~330 parts — measured at 5349 bytes of envelope plus 79.6–86.8 bytes per part
+> against the real builds. Past that, every command failed at the handshake including the `clear`
+> that would have recovered it, while `codeblox info` kept serving a cached contract and reporting a
+> healthy server. It had never fired because the largest existing build is 52 parts; at 1:1 a car is
+> ~90 and a building ~200, so two builds cross it. **F-2**: `world.aabb()` fell through to `None` for
+> any unrecognised op, and `None` is the module's signal for "occupies nothing", so `fill` passed the
+> client-side bounds gate unchecked and would only be refused server-side mid-build — where `remove`
+> takes an id, so there is no partial undo. The fix is the inverted default, not the missing case: an
+> explicit `CONTROL_OPS` allowlist returns `None` and everything else must have a case or raise, so
+> the two ops P-8 adds and the plan-extent measurement P-9 builds on the same function cannot
+> silently escape. The raise is a new `AnchorError(WorldError)` caught *before* its parent, because
+> an unmeasurable op is exit 5 (rejected here), not exit 4 (server unreachable). F-1's test was
+> confirmed non-vacuous by reverting the one-line fix. Detail: `docs/fixes/F-1.md` ·
+> `docs/fixes/F-2.md`.
+
+> P-12 (done, unreleased): Placed here by date, not by id — the work landed at `8c99d21` between
+> P-6 and P-7, outside the phase structure, and only got a row (P-12) afterwards so that it had some
+> route to a version at all. **I-5** gave `codeblox-builder` a workflow where it had a pipeline: a
+> plan is named stages, and every stage is expanded, bounds-checked and dry-run *before* the first
+> block is sent. A plan either builds or nothing moves — a correctness property, not an ergonomic
+> one, because `remove` takes an id rather than a region, so a bad material in the last stage of
+> five used to surface after four had already landed, with no way back but `clear`. The staging
+> also turned out to be choreography: `DropAnimator` never re-animates a settled part, so every
+> submitted batch is exactly one animation beat, and a forty-part castle sent flat lands as one
+> undifferentiated shower. A carve step was in the originating sketch and had to be removed —
+> `applyBatch` resolves `remove` by id over scaled parts, so there is no boolean subtraction and
+> openings are *composed*. An undo ledger was declined: it would be a second source of truth for
+> world state in a project whose locked invariant is that the server is authoritative, and its
+> competitor — `clear` plus a re-run of a pre-validated plan — is one command and deterministically
+> identical. **I-6** is the other half, and the reported symptom was blunt: build the white house,
+> inspect it, build the bridge, and the camera never moves. Two causes stacked on a third. Only
+> `world.onClear` ever handed the camera back, and neither plan had a `clear` stage; even in agent
+> mode `_worldBounds()` fitted *all* parts, so two builds 500 blocks apart became two specks. The
+> one underneath is that the viewer had no concept of a build — it saw a stream of parts and
+> therefore *could not* know which were the new thing, and no timing heuristic recovers that, since
+> `build.py` paces a 100-part stage at 2.1 s, so the gap *within* one build is unbounded and any
+> threshold eventually splits a build in two. The fix is a domain event rather than a threshold: a
+> field-less `build_begin` control op the server relays and `build.py` sends ahead of stage 1, after
+> which the viewer groups the build's ids and frames that sphere. **Zero Go changes**, which is the
+> schema-driven design paying out — `contract.Ops` is unmarshalled from the published payload, so
+> the CLI picked the op up the moment the server restarted, and it refuses an *unpublished* op
+> client-side with exit 5, which is what makes the marker safe against an older server. Not covered
+> by any automated check: the camera motion in a real browser after a human has dragged the canvas.
+> Detail: `docs/phases/phase-12.md` · `docs/improvements/I-5.md` · `docs/improvements/I-6.md`.
 
 > P-6 (v0.6.0): Split `App`, which had grown to 9 public methods across two unrelated concerns —
 > credential lifecycle and world building — sharing only the injected substrate. Now a `base` struct

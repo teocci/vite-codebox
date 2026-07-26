@@ -1,7 +1,7 @@
 # Tracking conventions — project overrides (codeblox)
 
 Project bindings for the `dev-phase-*` skill family. The reusable base lives in
-`.claude/dev-phase/dev-phase-workflow/references/conventions.md`; this file **overrides and
+`.claude/skills/dev-phase-workflow/references/conventions.md`; this file **overrides and
 extends** it. Resolution order is always: base conventions → these overrides.
 
 ```toml
@@ -49,17 +49,6 @@ $env:PATH = "C:\Users\teocci\AppData\Roaming\fnm\node-versions\v24.13.1\installa
 ### Two Python venvs are irrelevant here
 The product is JS. The repo `.venv/` exists solely to run the `dev-phase-*` skill scripts
 (stdlib-only — no `requirements.txt`, nothing to install). It is gitignored.
-
-### Skill location
-The family lives under a group directory at `.claude/skills/dev-phase/<skill>/scripts/`, not
-`.claude/skills/<skill>/scripts/` as the SKILL.md bodies show. The `tracklib` import bootstrap
-(`parents[2]`) and `tests/conftest.py` (`parents[1]`) both resolve correctly at this nesting, so run
-the scripts by their real path:
-
-```bash
-.venv/Scripts/python .claude/skills/dev-phase/dev-phase-status/scripts/status.py
-.venv/Scripts/python -m pytest .claude/skills/dev-phase/tests -q
-```
 
 ### Repository layout (npm workspaces)
 `apps/web` (viewer, Vite's root) and `apps/server` (ws server) are **siblings** — neither app is

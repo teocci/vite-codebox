@@ -6,6 +6,48 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- I-7: Two part ops, `ellipsoid` (`at` centre, `size` full extent) and `tube` (`at` centre, `r`, `h`,
+  `axis`). The renderer could already draw both — the instance matrix carries a fully non-uniform
+  scale, so a unit sphere becomes any axis-aligned ellipsoid — and `tube` gets its orientation from
+  one of three baked geometries rather than a runtime rotation, so parts stay axis-aligned and every
+  AABB stays exact. Additive: no existing op or field changed, and the CLI picks both up from the
+  contract without a rebuild.
+- I-6: A `build_begin` control op marks where one build ends and the next begins. The viewer had no
+  concept of a build — it saw a stream of parts — so a second build arriving into a populated world
+  looked like any other parts, and the camera stayed where it was. It now groups the ids that follow
+  the marker and frames just those, instead of fitting every part in the world. Field-less and
+  additive; the CLI picks it up from the published contract with no rebuild, and a server that does
+  not publish it refuses the op client-side rather than failing mid-build.
+- I-5: `codeblox-builder` builds from a declarative stage plan (`build.py`). Every stage is expanded
+  and bounds-checked and the whole plan is dry-run *before* the first block is sent, so a bad
+  material in the last stage of five is caught while nothing has landed — which matters because
+  `remove` takes an id, so there is no partial undo. Stages then land one at a time with progress,
+  paced off the real settle time, which is also what makes a build read as being built rather than
+  arriving as one shower. `--from N`, `--only NAME` and `--no-focus` for iterating.
+
+### Changed
+
+- I-6: Build plans live in a gitignored `builds/` beside the work rather than in the repo root.
+  `build.py` reads stdin and never opens a plan file, so the location stays a convention rather than
+  a path baked into a script.
+- I-5: The `codeblox-builder` skill documents a *workflow* rather than a pipeline, and its
+  guardrails now state the two things that were only implicit: this engine cannot carve — openings
+  are composed from parts around the gap, not subtracted — and there is no partial undo.
+
+### Fixed
+
+- F-1: The CLI no longer fails at the handshake once the world passes ~330 parts. The welcome frame
+  carries the whole world snapshot and `transport` never lifted the websocket library's 32 KiB read
+  limit, so past that size *every* command failed — including the `clear` that would have recovered
+  the world, leaving a server restart as the only way out. Never hit before because the largest
+  existing build is 52 parts.
+- F-2: An out-of-bounds `fill` is now refused by the skill's client-side bounds gate instead of
+  reaching the server mid-build, where there is no partial undo. `world.aabb()` had treated any op it
+  did not recognise as occupying nothing; it now returns nothing only for an explicit control-op
+  allowlist and raises otherwise, so no op added later can silently escape the gate.
+
 ## [0.6.0] - 2026-07-26
 
 Split App along its two domains: a type per concern over a shared base
