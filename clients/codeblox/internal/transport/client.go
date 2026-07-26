@@ -111,6 +111,14 @@ func (d Dialer) Connect(ctx context.Context) (*Conn, error) {
 		return nil, fmt.Errorf("connect to %s: %w", d.Endpoint, err)
 	}
 
+	// The welcome frame carries the whole world snapshot, so its size grows with
+	// the build — roughly 80 bytes per part on top of a ~5 KB contract. The
+	// library's 32 KiB default read limit would therefore cap the world at ~330
+	// parts, after which *every* command fails at the handshake, including the
+	// clear that would recover it. The server is trusted and local, so the frame
+	// is not a hostile-input surface: lift the limit entirely.
+	ws.SetReadLimit(-1)
+
 	welcome, err := handshake(ctx, ws, d.Token)
 	if err != nil {
 		ws.CloseNow()

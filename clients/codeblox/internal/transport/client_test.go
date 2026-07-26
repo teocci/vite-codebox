@@ -78,6 +78,59 @@ func TestConnectSendsTheHelloAndReturnsTheWelcome(t *testing.T) {
 	}
 }
 
+// The welcome frame carries the whole world, so it outgrows the library's 32 KiB
+// default read limit at a few hundred parts. Past that every command — including
+// the clear that would recover the world — used to fail at the handshake.
+func TestConnectReadsAWelcomeLargerThanTheDefaultReadLimit(t *testing.T) {
+	const defaultReadLimit = 32768
+
+	welcome := bigWelcome(1000)
+	if len(welcome) <= defaultReadLimit {
+		t.Fatalf("test fixture is %d bytes, want more than the %d-byte default limit",
+			len(welcome), defaultReadLimit)
+	}
+
+	srv := helloServer(t, func(ctx context.Context, c *websocket.Conn, _ []byte) {
+		_ = c.Write(ctx, websocket.MessageText, welcome)
+	})
+
+	d := Dialer{Endpoint: wsURL(srv.URL), Token: "tok"}
+	conn, err := d.Connect(context.Background())
+	if err != nil {
+		t.Fatalf("Connect() on a %d-byte welcome = %v, want nil", len(welcome), err)
+	}
+	defer conn.Close()
+
+	var parts []json.RawMessage
+	if err := json.Unmarshal(conn.Welcome.Parts, &parts); err != nil {
+		t.Fatalf("parse Welcome.Parts: %v", err)
+	}
+	if len(parts) != 1000 {
+		t.Fatalf("got %d parts, want 1000 — the frame was truncated", len(parts))
+	}
+}
+
+// bigWelcome builds a welcome frame shaped like the server's, with n parts.
+func bigWelcome(n int) []byte {
+	parts := make([]map[string]any, n)
+	for i := range parts {
+		parts[i] = map[string]any{
+			"id": i, "kind": "box",
+			"center": []int{i, i + 1, i + 2}, "size": []int{18, 4, 56},
+			"material": "silver",
+		}
+	}
+	frame, err := json.Marshal(map[string]any{
+		"type":     "welcome",
+		"contract": map[string]any{"ops": []string{"box"}},
+		"parts":    parts,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return frame
+}
+
 func TestConnectSurfacesAnUnauthorizedRejection(t *testing.T) {
 	srv := helloServer(t, func(ctx context.Context, c *websocket.Conn, _ []byte) {
 		_ = c.Write(ctx, websocket.MessageText, []byte(`{"type":"error","message":"unauthorized"}`))

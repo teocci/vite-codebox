@@ -9,8 +9,10 @@ import subprocess
 import pytest
 
 import submit
+import world
 
 BOUNDS = {'x': [-1600, 1600], 'y': [0, 3200], 'z': [-1600, 1600]}
+CONTRACT = {'config': {'blockSize': 0.02, 'boundBlocks': 1600, 'heightBlocks': 3200}}
 INSIDE = {'op': 'box', 'at': [0, 0, 0], 'size': [4, 4, 4], 'mat': 'oak'}
 BELOW_FLOOR = {'op': 'box', 'at': [0, -10, 0], 'size': [4, 4, 4], 'mat': 'oak'}
 
@@ -70,6 +72,24 @@ def test_the_gate_names_which_command_is_wrong():
     assert 'command 1' in message
     assert 'y=-10' in message
     assert 'nothing sent' in message
+
+
+def test_an_op_with_no_anchoring_rule_reaches_the_caller_as_an_anchor_error():
+    # world.aabb refuses to measure an op it does not know rather than reporting
+    # it as occupying nothing. The gate must not swallow that.
+    with pytest.raises(world.AnchorError):
+        submit.check_bounds([{'op': 'torus', 'at': [0, 0, 0], 'r': 4}], BOUNDS)
+
+
+def test_an_anchor_error_exits_5_not_4(monkeypatch, capsys):
+    # AnchorError subclasses WorldError, so the except order in main() decides
+    # this. Getting it wrong reports "the server is unreachable" for a bad plan.
+    monkeypatch.setattr(submit.rc, 'resolve', lambda *_a, **_k: {'path': 'codeblox'})
+    monkeypatch.setattr(submit.world, 'fetch', lambda *_a, **_k: CONTRACT)
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps({'op': 'torus', 'at': [0, 0, 0]})))
+
+    assert submit.main([]) == submit.EXIT_CONTRACT
+    assert 'torus' in capsys.readouterr().err
 
 
 def test_the_gate_runs_before_anything_is_sent():

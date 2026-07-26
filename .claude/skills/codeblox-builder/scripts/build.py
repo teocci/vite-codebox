@@ -385,6 +385,11 @@ def main(argv: list[str] | None = None) -> int:
     except rc.ResolutionError as exc:
         print(f'build: {exc}', file=sys.stderr)
         return EXIT_USAGE
+    # Before WorldError, which it subclasses: an unmeasurable op is a plan
+    # rejected here (5), not a server that would not answer (4).
+    except world.AnchorError as exc:
+        print(f'build: {exc}', file=sys.stderr)
+        return EXIT_CONTRACT
     except world.WorldError as exc:
         print(f'build: {exc}', file=sys.stderr)
         return EXIT_NETWORK
