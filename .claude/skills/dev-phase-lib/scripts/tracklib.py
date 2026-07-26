@@ -15,6 +15,7 @@ import tomllib
 from pathlib import Path
 
 SEMVER_RE = re.compile(r'^\d+\.\d+\.\d+$')
+LINK_CELL_RE = re.compile(r'^\[([^\]]+)\]\([^)]*\)$')
 
 DEFAULTS = {
     'package': None,
@@ -83,18 +84,49 @@ def write(path: Path, text: str) -> None:
     path.write_text(text, encoding='utf-8')
 
 
-def read_version(root: Path, cfg: dict) -> str | None:
-    '''Read the version out of <version_file>.
+def _version_pattern(attr: str) -> str:
+    '''Regex matching one quoted version literal bound to *attr*.
 
-    Accepts both assignment (``__version__ = '1.2.3'`` — Python/JS) and mapping
-    (``"version": "1.2.3"`` — JSON/YAML) forms so one helper serves any project language.
+    Group 1 is the separator (absorbing a JSON/YAML key's closing quote when present), group 2
+    the value's quote character (backreferenced as the closer), group 3 the version itself.
+    Reader and writer both build their pattern here so the two can never drift.
+
+    Matches assignment form (``__version__ = '1.2.3'`` — Python/JS) and mapping form
+    (``"version": "1.2.3"`` — JSON/YAML), so one helper serves any project language. ``attr`` is
+    the bare key name (``version`` for a ``package.json``), not the quoted spelling. The value
+    must be quoted; bare YAML scalars are not supported.
     '''
+    return re.escape(attr) + r'(["\']?\s*[:=]\s*)(["\'])([^"\']+)\2'
+
+
+def read_version(root: Path, cfg: dict) -> str | None:
     vf = root / cfg['version_file']
     if not vf.exists():
         return None
-    attr = re.escape(cfg.get('version_attr', '__version__'))
-    m = re.search(attr + r"\s*[:=]\s*['\"]([^'\"]+)['\"]", vf.read_text(encoding='utf-8'))
-    return m.group(1) if m else None
+    pattern = _version_pattern(cfg.get('version_attr', '__version__'))
+    m = re.search(pattern, vf.read_text(encoding='utf-8'))
+    return m.group(3) if m else None
+
+
+def bump_version_text(text: str, attr: str, version: str, where: str = 'the version file') -> str:
+    '''Rewrite the single version literal in *text*, preserving separator and quote style.
+
+    The captured quote character is reused, which keeps a JSON version file valid and stops a
+    Black-formatted Python file being reflowed to single quotes on every release. The replacement
+    is a callable, not a template, so a backslash in *attr* or *version* cannot corrupt the output.
+
+    Raises:
+        SystemExit: when nothing matched. A silent no-op would report a bump that never
+            happened and leave the release incoherent.
+    '''
+    out, n = re.subn(_version_pattern(attr),
+                     lambda m: attr + m.group(1) + m.group(2) + version + m.group(2),
+                     text, count=1)
+    if n == 0:
+        raise SystemExit(
+            f'version bump failed: no {attr} literal found in {where} — '
+            f'check version_file/version_attr in docs/conventions/tracking.md')
+    return out
 
 
 def is_semver(s: str | None) -> bool:
@@ -211,6 +243,50 @@ def prepend_table_rows(text: str, header_contains: tuple[str, ...], new_rows: li
     at = hdr + 2  # after header + divider
     out = lines[:at] + list(new_rows) + lines[at:]
     return '\n'.join(out) + ('\n' if text.endswith('\n') else '')
+
+
+def cell_id(cell: str) -> str:
+    '''Bare id from a table's ID cell, whether the id is linked or not.
+
+    Index tables link the id (``[I-10](improvements/I-10.md)``); the plan table and older
+    hand-written rows write it bare (``I-1``). Both yield the bare id, so a caller can match
+    by equality instead of substring — ``'I-1' in '[I-10](improvements/I-10.md)'`` is true and
+    would stamp the wrong row.
+
+    Args:
+        cell: A single table cell, already stripped of its surrounding pipes.
+
+    Returns:
+        The link text if the cell is exactly a markdown link, else the cell itself.
+
+    Example:
+        >>> cell_id('[I-10](improvements/I-10.md)')
+        'I-10'
+        >>> cell_id('P-15')
+        'P-15'
+    '''
+    cell = cell.strip()
+    m = LINK_CELL_RE.match(cell)
+    return m.group(1).strip() if m else cell
+
+
+def id_matcher(target: str):
+    '''A ``key_pred`` selecting the one row whose ID cell is *target*.
+
+    Use this instead of an inline predicate: matching with ``target in cells[0]`` also
+    selects every longer id sharing the prefix, so releasing ``I-1`` would silently stamp
+    ``I-10`` too.
+
+    Args:
+        target: The bare id to match, e.g. ``'I-1'`` or ``'P-15'``.
+
+    Returns:
+        A predicate for :func:`update_table_rows` — true for exactly the matching row.
+    '''
+    def matches(cells: list[str]) -> bool:
+        return bool(cells) and cell_id(cells[0]) == target
+
+    return matches
 
 
 def update_table_rows(text: str, header_contains: tuple[str, ...], key_pred, transform) -> str:

@@ -251,6 +251,16 @@ runs; the scripts stay read-only.
 - If the project derives its package version dynamically from that attribute (common), **never**
   add a literal version elsewhere (e.g. a build file) — doing so is a bug. `tracking.md` states
   the specific hazard for the project.
+- **The version file is language-agnostic.** The bump reads and writes both the assignment form
+  (`<VERSION_ATTR> = '1.2.3'` — Python, JS) and the mapping form (`"<VERSION_ATTR>": "1.2.3"` —
+  JSON, YAML), so a `package.json` is as valid a `<VERSION_FILE>` as a `src/__init__.py`. The
+  value's **quote character is preserved**, which keeps JSON valid and stops a double-quoted
+  Python file being reflowed on every release. The value must be quoted — a bare YAML scalar
+  (`version: 1.2.3`) is not matched.
+- **A bump that matches nothing is a hard failure**, not a no-op: `cut_release.py` exits naming
+  `<VERSION_FILE>` and writes nothing. A silent skip would report a bump that never happened and
+  leave the release incoherent (the coherence gate would then flag it as a CHANGELOG mismatch —
+  late, after the other files are already rewritten, and pointing at the wrong file).
 
 ## 9. Guardrails
 
@@ -272,7 +282,7 @@ runs; the scripts stay read-only.
 | Placeholder | Meaning |
 |---|---|
 | `<PACKAGE>` | Import/package name |
-| `<VERSION_FILE>` / `<VERSION_ATTR>` | Where `__version__` lives; the attribute path |
+| `<VERSION_FILE>` / `<VERSION_ATTR>` | The single version source-of-truth and the key inside it. Any language (§8): `src/__init__.py` + `__version__`, or `package.json` + `version`. `<VERSION_ATTR>` is the **bare key name** — no surrounding quotes, even for JSON. |
 | `<TEST_CMD>` | Command that runs the suite |
 | `<RELEASE_BRANCH>` | Branch a release tag is cut on (default `main`) |
 | `integration` | `trunk` \| `branch` — how work reaches `<RELEASE_BRANCH>` (§7b; default `trunk`) |

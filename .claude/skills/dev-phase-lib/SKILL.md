@@ -21,9 +21,11 @@ no command to run and no reason to invoke this skill. The `dev-phase-*` scripts 
 ## How consumers import it (uniform bootstrap)
 
 Every consumer script lives two levels below the directory that holds all the sibling `dev-phase-*`
-skill dirs — the deployed `.claude/skills/` when installed flat, or the `dev-phase/` family folder in
-the source repo — so `parents[2]` is that container in either layout. A consumer adds this block
-before importing — copy it verbatim; do **not** duplicate `tracklib.py` itself:
+skill dirs — `skills/` in this repo, `.claude/skills/` once deployed — so `parents[2]` is that
+container. The family is **flat**: the five skill dirs sit side by side directly under the container,
+never nested inside a `dev-phase/` family folder, because harnesses read `<root>/<name>/SKILL.md` and
+do not recurse. A consumer adds this block before importing — copy it verbatim; do **not** duplicate
+`tracklib.py` itself:
 
 ```python
 # scripts live at <container>/<skill>/scripts/ → parents[2] is the container of the sibling skill dirs
@@ -36,5 +38,5 @@ The insert adds the *directory*, so any future module placed in `dev-phase-lib/s
 off the same line without extra bootstrap. This is `__file__`-relative and zero-install (no package
 to `pip install`); the library travels with its consumers, so copy the family, not one skill dir.
 
-See `.claude/rules/15-skills.md` and `.claude/rules/07-module-organization.md` for how the skill
-rules apply to a shared-library skill like this one.
+See `~/.claude/rules/common/skill-scripts.md` and `~/.claude/rules/python/05-module-organization.md`
+for how the skill rules apply to a shared-library skill like this one.
