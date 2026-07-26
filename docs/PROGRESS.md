@@ -1,10 +1,12 @@
 # Progress
 
 **Current version:** 0.6.0
-**Active phase:** P-9 — a five-phase plan to make builds land at true 1:1 scale and give the model
-primitives that sculpt. P-7 (F-1, F-2), P-8 (I-7) and P-12 (I-5, I-6) are `done` and unreleased;
-R2 closes with P-11 and ships all of them together. 372 tests: 74 vitest, 112 Go unit, 24 Go e2e, 162 pytest (codeblox-builder) — plus 31
-pytest for the `dev-phase` skill family, which no previous total counted.
+**Active phase:** P-10 and P-11 — a five-phase plan to make builds land at true 1:1 scale and give
+the model primitives that sculpt. P-7 (F-1, F-2), P-8 (I-7), P-9 (I-8) and P-12 (I-5, I-6) are `done`
+and unreleased; R2 closes with P-11 and ships all of them together. P-10 and P-11 are independent and
+can run in parallel. 420 tests: 74 vitest, 112 Go unit, 24 Go e2e, 210 pytest (codeblox-builder, +1
+skipped) — plus 54 pytest for the `dev-phase` skill family, which is chore-track tooling and is
+counted separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -28,15 +30,23 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 6 | Split `App` along its two domains | done |
 | 7 | Close the two silent holes under the scale gate | done |
 | 8 | Native ellipsoid and tube ops | done |
-| 9 | The scale gate — declared subject dimensions, checked before send | planned |
+| 9 | The scale gate — declared subject dimensions, checked before send | done |
 | 10 | SKILL.md: the authoring rule, the shape vocabulary, and the real part cost | planned |
 | 11 | Make large world extents usable | planned |
 | 12 | A build is a thing, to the skill and to the viewer (I-5, I-6) — retroactive, see `docs/PLAN.md` note 3 | done |
 
 ## Next action
 
-The plan is closed; nothing is scheduled. One thread remains, and it is the only one that changes
-what the product can do:
+**P-10 (I-9) and P-11 (I-10) are both unblocked and independent** — P-10 needs P-8 and P-9, P-11
+needs P-9, and all are `done`. They can run in parallel, in separate sessions. R2 closes with P-11
+and ships P-7, P-8, P-9, P-11 and P-12 together as one minor.
+
+Two unscheduled fixes surfaced while verifying P-9, neither with an item yet: `world.fetch`'s
+`--refresh` is not a flag `codeblox info` accepts, so a refresh is a usage error and preflight can
+report a stale cached contract; and the running ws server is stale, publishing 8 ops without P-8's
+`ellipsoid` and `tube` even though both are committed.
+
+Longer-standing, and the only thread that changes what the product can do:
 
 **WSS/TLS**, outstanding from Phase 2. The server runs plain `ws`, and the CLI
 refuses to send a token over `ws://` to a non-loopback host — so remote use is blocked loudly rather
@@ -45,6 +55,33 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> P-9 (done, unreleased): The scale gate (I-8). Every man-made build in `builds/` had landed at
+> 15-26% of true size — the Tesla is 1.16 m against a real 4.97 m, the Golden Gate 22.4 m against
+> 2737 m — and nothing could have noticed, because a block is 2 cm and no value existed anywhere for a
+> check to compare against. A plan now declares `subject.mm`, and `build.py` measures the expanded
+> plan's own AABB against it **before the first block is sent**, which is the only useful moment:
+> `remove` takes an id, not a region, so there is no partial undo of a wrongly-sized build. The
+> per-axis **ratio triple** is what makes the failure actionable, because it separates two cases whose
+> remedies are opposite — a uniform miss is arithmetic and the new `dims.py fit` repairs it, while a
+> proportion error is a geometry mistake and rescaling it would produce a correctly-sized wrong shape
+> that then passes this very gate, so that envelope names the outlier axis and refuses to offer the
+> rescale. Tolerance is 10% per axis with a one-block floor, which is not slack: `to_blocks` rounds to
+> nearest, so a subject can be half a block out at each end through no fault of the plan. An oversized
+> subject is reported on its own terms, naming the `world.extent` to raise rather than a smaller build
+> — on the Golden Gate that is ≥1368.5, which is where P-11's `extent 1400` comes from. `subject` is
+> **optional but validated**: no pre-existing plan becomes invalid, but a malformed one is refused
+> because it would silently disable the gate it was written to enable. The new `dims.py` converts real
+> dimensions to blocks (with spec-sheet L/W/H order as a flag, since transposing those fails quietly),
+> rescales by moving **both corners** and deriving the size from them — rounding `at` and `size`
+> independently opens a one-block seam at every joint — and expands shape calls first, because
+> `segments`, `steps` and `thickness` are not lengths. The metre is now visible everywhere the block
+> was: derived once in `world.digest`, stated by `doctor.py` on the rung that already held the
+> contract, and reported per stage as it lands. The inherited draft's `factor` was a harmonic mean
+> written as a chained `and` and scaled a too-big build *further up*; that was the first failing test.
+> Live-verified end to end — declared Model S refused at exit 5, fitted, then built, 37 parts in 5
+> stages, 4.96 m in the world — and that live run caught a fixed-width metre column printing
+> `3.26 m620ms`. Detail: `docs/improvements/I-8.md`, `docs/phases/phase-9.md`.
 
 > P-8 (done, unreleased): Two new part ops, `ellipsoid` and `tube` (I-7). The model had been using
 > `sphere` for car wheels, bear paws and human hands — `builds/bear.json` is 17 spheres out of 17

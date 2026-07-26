@@ -6,20 +6,24 @@
 |-------|-------|---------|---------|---------|--------|
 | P-7 | F-1, F-2 | — | R2 | (pending) | done |
 | P-8 | I-7 | P-7 | R2 | (pending) | done |
-| P-9 | I-8 | P-7 | R2 | (pending) | pending |
+| P-9 | I-8 | P-7 | R2 | (pending) | done |
 | P-10 | I-9 | P-8, P-9 | R2 | (pending) | pending |
 | P-11 | I-10 | P-9 | R2 | (pending) | pending |
 | P-12 | I-5, I-6 | — | R2 | (pending) | done |
 
 ## Handoff — 2026-07-26
 
-P-7 and P-8 are implemented, tested and documented, but **unreleased**: P-7 was
-originally scaffolded as its own release group R1 and was then collapsed into R2, so
-everything ships together as one minor (`v0.7.0`) when P-11 closes the group. Nothing is
-committed; the working tree carries all of it.
+P-7, P-8 and P-12 are implemented, tested, documented and **committed on `main`** (through
+`9fd8ff7`), but **unreleased**: P-7 was originally scaffolded as its own release group R1 and was
+then collapsed into R2, so everything ships together as one minor (`v0.7.0`) when P-11 closes the
+group. The tag is still `v0.6.0` and `[Unreleased]` carries the bullets.
 
-P-9, P-10 and P-11 are deferred to a later session. The full design for all three is in
-the approved plan and in the `I-8` / `I-9` / `I-10` stubs.
+P-9 is **done** and unreleased with the rest. P-10 and P-11 are now a **parallel wave** — P-10 needs
+P-8 and P-9, P-11 needs P-9, and both are satisfied — so they are independent and can run in separate
+sessions. The full design for both is in the approved plan and in the `I-9` / `I-10` stubs.
+
+P-11 has a number waiting for it: I-8's oversized-subject envelope asks for `world.extent` ≥ 1368.5
+to hold the Golden Gate at 1:1, which is where P-11's `extent 1400` comes from.
 
 Notes for `dev-phase-complete` Part B:
 
@@ -62,8 +66,17 @@ Notes for `dev-phase-complete` Part B:
    files whose version equals the *current* one — which is why the gate stayed green over a
    two-item hole. All three are now normalised. Pass `--improvements I-5 I-6` with the rest.
 
-`.claude/skills/codeblox-builder/scripts/dims.py` exists but is **incomplete and has never
-been run** — it carries a WIP banner naming a known defect. It is not imported by
-anything. The `codeblox-builder` skill has not been mirrored to `.codex/` or `.agents/`,
-so those two copies are stale with respect to the P-7 changes in `world.py`, `submit.py`
-and `build.py`.
+`dims.py` is complete as of P-9: tested, live-run, its inherited `factor` defect fixed and its WIP
+banner removed. Two things it surfaced are **not** fixed and have no item yet:
+
+- `world.fetch(refresh=True)` sends `--refresh` to `codeblox info`, which rejects it
+  (`flag provided but not defined: -refresh`). So a refresh is a usage error and `doctor.py` can
+  report a **stale cached contract** — the cache at `~/.codeblox/world_info.json` had to be deleted
+  by hand to re-fetch. Wants a fix item.
+- The running ws server is **stale**: a fresh fetch published only 8 ops, without P-8's `ellipsoid`
+  and `tube`, though both are committed in `packages/shared/protocol.js`. Restart is all it needs,
+  but I-7 has therefore not been live-verified against a server built from its own code.
+
+The `codeblox-builder` skill has not been mirrored to `.codex/` or `.agents/`, so those two copies
+are stale with respect to the P-7 changes in `world.py`, `submit.py` and `build.py` — and now the
+P-9 changes in `build.py`, `world.py`, `doctor.py` and the new `dims.py`.

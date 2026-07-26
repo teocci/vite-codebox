@@ -52,6 +52,23 @@ def test_digest_keeps_the_field_types_the_server_published():
     assert view['ops']['box'] == {'at': 'int3', 'size': 'int3+', 'mat': 'material'}
 
 
+def test_digest_derives_how_many_blocks_span_a_metre():
+    # The one number a builder needs and the contract does not publish. Left to
+    # be re-derived per call site, it gets guessed — and 1 block = 1 m is the
+    # guess that produced an 80 cm castle.
+    assert world.digest(CONTRACT)['blocksPerMetre'] == 50
+
+
+def test_a_contract_with_no_usable_block_size_derives_nothing():
+    # Reporting a number here would be inventing one.
+    assert world.digest({'config': {}})['blocksPerMetre'] is None
+
+
+def test_the_rendered_digest_states_the_metre_conversion():
+    line = world.render(world.digest(CONTRACT)).splitlines()[0]
+    assert '50' in line and 'metre' in line
+
+
 def test_bounds_put_the_floor_at_zero():
     # The asymmetry that matters: x and z are symmetric about the origin, y is
     # not — nothing may be built below the floor.

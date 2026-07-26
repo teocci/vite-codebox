@@ -1,24 +1,4 @@
-'''INCOMPLETE — WORK IN PROGRESS, NOT WIRED UP, NEVER RUN.
-
-    This file was written part-way through P-9 (I-8) and the session stopped
-    before any of it was executed or tested. Do not trust it and do not import
-    it. Nothing references it today; build.py has no scale gate yet.
-
-    Known defect: the `factor` expression in fit() is a mangled harmonic mean
-    written as a chained `and`, and is wrong. It should be the reciprocal of the
-    mean of `got`. There are almost certainly others — no test has ever run.
-
-    Outstanding for P-9, none of it done:
-      - tests/test_dims.py does not exist
-      - build.py: subject validation in load_plan, plan_aabb(), check_scale(),
-        the two failure envelopes, metres in stage_line()
-      - world.py: blocksPerMetre in digest() and the derived line in render()
-      - doctor.py: carry the metre label it drops
-      - builds/*.json: subject headers
-
-    See docs/improvements/I-8.md and the approved plan for the intended design.
-
-Turn real-world dimensions into blocks, and rescale a plan that missed.
+'''Turn real-world dimensions into blocks, and rescale a plan that missed.
 
     $VENV/python .../dims.py to-blocks 5057 1999 1680 [--mm|--m|--ft|--in] [--lwh]
     $VENV/python .../dims.py fit < builds/thing.json > builds/thing.fixed.json
@@ -255,8 +235,13 @@ def fit(plan: dict, block_size: float) -> dict:
             f'  the {world.AXES[worst]} axis is the outlier — fix the geometry, then re-run fit',
             EXIT_CONTRACT)
 
-    factor = sum(1 / r for r in got if r) and len([r for r in got if r]) / sum(1 / r for r in got if r)
-    return rescale(plan, factor)
+    # The reciprocal of the mean ratio: if the build came out twice its declared
+    # size on every axis, every axis needs halving. Averaging first and inverting
+    # once keeps a near-uniform miss from favouring whichever axis rounded up.
+    live = [r for r in got if r]
+    if not live:
+        raise DimsError('plan measures zero on every axis; nothing to fit', EXIT_CONTRACT)
+    return rescale(plan, len(live) / sum(live))
 
 
 # ── command line ────────────────────────────────────────────────────────────

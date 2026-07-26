@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- I-8: A build plan can declare the real size of its subject — `subject.mm`, in millimetres, in the
+  protocol's own `x, y, z` — and the plan is measured against that declaration before the first block
+  is sent. Every man-made build in the repo had landed at 15-26% of true size with nothing to notice:
+  a block is 2 cm, and there was no value anywhere for a check to compare against. The per-axis ratio
+  separates the two failures that look alike, because their remedies are opposite — a uniform miss is
+  arithmetic and the new `dims.py fit` repairs it, while a mismatch in proportion is a geometry
+  mistake and rescaling it would only produce a correctly-sized wrong shape. A subject larger than
+  the world is reported on its own terms, naming the `world.extent` that would hold it. The field is
+  optional, so no existing plan becomes invalid.
+- I-8: `dims.py` converts real dimensions to blocks (`to-blocks`, with spec-sheet length/width/height
+  order as a flag since transposing those fails quietly), rescales a plan to its own declaration
+  (`fit`), and reports human-scale reference dimensions (`anchors`). A rescale moves both corners of
+  every part and derives the size from them rather than scaling `at` and `size` independently, which
+  would open a one-block seam at every joint.
 - I-7: Two part ops, `ellipsoid` (`at` centre, `size` full extent) and `tube` (`at` centre, `r`, `h`,
   `axis`). The renderer could already draw both — the instance matrix carries a fully non-uniform
   scale, so a unit sphere becomes any axis-aligned ellipsoid — and `tube` gets its orientation from
@@ -29,6 +43,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- I-8: The metre is now reported everywhere the block already was. `codeblox info`'s digest derives
+  how many blocks span a metre, preflight states it on the rung that already had the contract in hand,
+  and each stage of a build reports what it landed in metres as well as in parts. The conversion is
+  derived from the published contract, never written down, so changing the block size changes all
+  three with no edit.
 - I-6: Build plans live in a gitignored `builds/` beside the work rather than in the repo root.
   `build.py` reads stdin and never opens a plan file, so the location stays a convention rather than
   a path baked into a script.

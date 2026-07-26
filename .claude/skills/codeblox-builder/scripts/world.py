@@ -90,12 +90,25 @@ def digest(contract: dict) -> dict:
     return {
         'blockSize': config.get('blockSize'),
         'blockLabel': config.get('blockLabel'),
+        'blocksPerMetre': blocks_per_metre(config.get('blockSize')),
         'bounds': bounds_of(contract),
         'extentMetres': config.get('extent'),
         'materialCount': len(palette),
         'families': families,
         'ops': {op['op']: op.get('fields', {}) for op in contract.get('ops', [])},
     }
+
+
+def blocks_per_metre(block_size) -> float | None:
+    '''How many blocks span a metre, or None when the contract does not say.
+
+    Derived here rather than at each call site, because the derivation is the
+    thing that gets skipped: a block is not a metre, and every place that forgets
+    it produces a build off by the same factor with nothing to flag it.
+    '''
+    if not isinstance(block_size, (int, float)) or block_size <= 0:
+        return None
+    return round(1.0 / block_size, 6)
 
 
 def bounds_of(contract: dict) -> dict:
@@ -232,8 +245,10 @@ def main(argv: list[str] | None = None) -> int:
 def render(view: dict) -> str:
     '''A compact human/agent-readable digest.'''
     bounds = view['bounds']
+    per_metre = view.get('blocksPerMetre')
+    scale = f" = {per_metre:g} blocks per metre" if per_metre else ''
     lines = [
-        f"block {view['blockLabel']} ({view['blockSize']} m)   "
+        f"block {view['blockLabel']} ({view['blockSize']} m){scale}   "
         f"world {view['extentMetres']} m half-extent",
         f"bounds  x {bounds['x'][0]}..{bounds['x'][1]}   "
         f"y {bounds['y'][0]}..{bounds['y'][1]}   z {bounds['z'][0]}..{bounds['z'][1]}  (blocks)",

@@ -18,6 +18,10 @@ import submit
 BOUNDS = {'x': [-1600, 1600], 'y': [0, 3200], 'z': [-1600, 1600]}
 EXIT_CONTRACT = submit.EXIT_CONTRACT
 
+# Half-metre blocks: two to a metre, so a test that confuses the two gets a
+# different number rather than the same one.
+BLOCK = 0.5
+
 MASS = {'shape': 'shell', 'at': [-20, 0, -20], 'size': [40, 14, 40], 'mat': 'brick'}
 DETAIL = {'op': 'box', 'at': [0, 20, 0], 'size': [2, 2, 2], 'mat': 'copper'}
 FAR_AWAY = {'op': 'box', 'at': [0, 3190, 0], 'size': [4, 40, 4], 'mat': 'oak'}
@@ -99,6 +103,149 @@ def test_a_stage_with_no_parts_is_refused_and_named():
     with pytest.raises(build.PlanError) as exc:
         build.load_plan(io.StringIO(json.dumps({'stages': [{'name': 'mass', 'parts': []}]})))
     assert 'mass' in str(exc.value)
+
+
+# ── the subject a plan declares ─────────────────────────────────────────────
+
+def test_a_plan_need_not_declare_a_subject():
+    # Every plan predating I-8 has no subject; none of them become invalid.
+    loaded = build.load_plan(io.StringIO(json.dumps(plan(stage('mass', MASS)))))
+    assert loaded.get('subject') is None
+
+
+def test_a_declared_subject_survives_loading():
+    body = {**plan(stage('mass', MASS)), 'subject': {'mm': [2000, 1000, 3000]}}
+    loaded = build.load_plan(io.StringIO(json.dumps(body)))
+    assert loaded['subject']['mm'] == [2000, 1000, 3000]
+
+
+def test_a_subject_needs_all_three_axes():
+    body = {**plan(stage('mass', MASS)), 'subject': {'mm': [2000, 1000]}}
+    with pytest.raises(build.PlanError) as exc:
+        build.load_plan(io.StringIO(json.dumps(body)))
+    assert 'three' in str(exc.value)
+
+
+def test_a_subject_axis_of_zero_is_refused():
+    # It would make the ratio for that axis undefined and the gate meaningless.
+    body = {**plan(stage('mass', MASS)), 'subject': {'mm': [2000, 0, 3000]}}
+    with pytest.raises(build.PlanError) as exc:
+        build.load_plan(io.StringIO(json.dumps(body)))
+    assert 'positive' in str(exc.value)
+
+
+def test_a_subject_measured_in_prose_is_refused():
+    body = {**plan(stage('mass', MASS)), 'subject': {'mm': ['about 2 m', 1000, 3000]}}
+    with pytest.raises(build.PlanError):
+        build.load_plan(io.StringIO(json.dumps(body)))
+
+
+def test_a_subject_without_millimetres_says_what_it_wants():
+    body = {**plan(stage('mass', MASS)), 'subject': {'name': 'a car'}}
+    with pytest.raises(build.PlanError) as exc:
+        build.load_plan(io.StringIO(json.dumps(body)))
+    assert 'mm' in str(exc.value)
+
+
+# ── the scale gate ──────────────────────────────────────────────────────────
+
+def scaled(*sizes) -> tuple[dict, list[list[dict]]]:
+    '''A one-stage plan declaring a 2x1x3 m subject, built at the given size.'''
+    parts = [{'op': 'box', 'at': [0, 0, 0], 'size': list(size), 'mat': 'oak'}
+             for size in sizes]
+    body = {**plan(stage('mass', *parts)), 'subject': {'mm': [2000, 1000, 3000]}}
+    return body, build.expand(body['stages'])
+
+
+def test_the_declared_size_is_measured_in_blocks_not_metres():
+    # 2x1x3 m at half-metre blocks is 4x2x6 blocks. Reading it as metres would
+    # build a car the size of a house and nothing downstream would notice.
+    body, batches = scaled([4, 2, 6])
+    build.check_scale(body['subject'], batches, BLOCK, BOUNDS)
+
+
+def test_a_build_at_the_wrong_scale_is_refused():
+    body, batches = scaled([8, 4, 12])
+    with pytest.raises(build.PlanError) as exc:
+        build.check_scale(body['subject'], batches, BLOCK, BOUNDS)
+    assert exc.value.code == EXIT_CONTRACT
+
+
+def test_a_uniform_miss_is_reported_as_mechanically_repairable():
+    # Every axis is out by the same factor, so one rescale fixes it.
+    body, batches = scaled([8, 4, 12])
+    with pytest.raises(build.PlanError) as exc:
+        build.check_scale(body['subject'], batches, BLOCK, BOUNDS)
+    message = str(exc.value)
+    assert 'dims.py' in message and 'fit' in message
+    assert '[4, 2, 6]' in message                  # what it should have been
+    assert '[8, 4, 12]' in message                 # what it came out as
+
+
+def test_a_proportion_error_is_not_offered_the_rescale():
+    # One factor cannot fix three ratios; offering fit here would produce a
+    # correctly sized wrong shape that then passes this very gate.
+    body, batches = scaled([4, 8, 6])
+    with pytest.raises(build.PlanError) as exc:
+        build.check_scale(body['subject'], batches, BLOCK, BOUNDS)
+    message = str(exc.value)
+    assert 'proportion' in message
+    assert 'fit' not in message
+
+
+def test_one_block_of_rounding_is_not_a_scale_error():
+    # to_blocks rounds to the nearest block, so a subject can be half a block
+    # off through no fault of the plan.
+    body, batches = scaled([5, 2, 6])
+    build.check_scale(body['subject'], batches, BLOCK, BOUNDS)
+
+
+def test_a_subject_too_big_for_the_world_names_what_would_fit():
+    body = {**plan(stage('mass', MASS)), 'subject': {'mm': [2_000_000, 1000, 3000]}}
+    with pytest.raises(build.PlanError) as exc:
+        build.check_scale(body['subject'], build.expand(body['stages']), BLOCK, BOUNDS)
+    message = str(exc.value)
+    assert exc.value.code == EXIT_CONTRACT
+    assert 'x' in message
+    assert '1600' in message                       # the largest x that fits, in metres
+
+
+def test_an_oversized_subject_is_answered_with_a_bigger_world():
+    # Not with a scale model: this project's worlds are configured in metres, so
+    # a 2 km subject means raising world.extent, not shrinking the build.
+    body = {**plan(stage('mass', MASS)), 'subject': {'mm': [2_000_000, 1000, 3000]}}
+    with pytest.raises(build.PlanError) as exc:
+        build.check_scale(body['subject'], build.expand(body['stages']), BLOCK, BOUNDS)
+    message = str(exc.value)
+    assert 'config.yaml' in message
+    assert 'world.extent' in message
+    assert '1000' in message                       # half-extent needed, in metres
+
+
+def test_a_plan_declaring_nothing_is_not_gated_on_scale():
+    build.check_scale(None, build.expand([stage('mass', MASS)]), BLOCK, BOUNDS)
+
+
+def test_a_plan_with_no_geometry_is_not_gated_on_scale():
+    marker = [[{'op': 'build_begin'}]]
+    build.check_scale({'mm': [2000, 1000, 3000]}, marker, BLOCK, BOUNDS)
+
+
+def test_the_scale_gate_runs_before_anything_is_sent():
+    # The headline guarantee, again: `remove` takes an id, so there is no
+    # partial undo of a wrongly-sized build.
+    body, _batches = scaled([8, 4, 12])
+    with pytest.raises(build.PlanError) as exc:
+        build.build('codeblox', body, BOUNDS, args(), run=never, block_size=BLOCK)
+    assert exc.value.code == EXIT_CONTRACT
+
+
+def test_without_a_block_size_the_scale_gate_stays_out_of_the_way():
+    # No contract means no way to know what a block is worth; guessing is worse
+    # than not checking.
+    body, _batches = scaled([8, 4, 12])
+    run, _calls = acking()
+    build.build('codeblox', body, BOUNDS, args(dry_run=True), run=run)
 
 
 # ── expanding parts ─────────────────────────────────────────────────────────
@@ -431,6 +578,39 @@ def test_a_clear_stage_reads_as_cleared_not_as_zero_ids():
     entry = {'index': 1, 'name': 'clear', 'count': 1, 'sent': 0,
              'addedIds': [], 'cleared': True, 'paceMs': 0}
     assert 'world cleared' in build.stage_line(entry, 5)
+
+
+def test_a_progress_line_reports_the_stage_in_metres_when_it_can():
+    # Blocks are the coordinate system; metres are what the subject was declared
+    # in, and the only unit an operator can sanity-check a build against.
+    entry = {'index': 1, 'name': 'mass', 'count': 6, 'sent': 6, 'addedIds': [1],
+             'cleared': False, 'paceMs': 0, 'metres': [2.0, 1.0, 3.0]}
+    assert '2×1×3 m' in build.stage_line(entry, 2)
+
+
+def test_a_long_metre_label_does_not_run_into_the_pace():
+    # Found live: '2.04×0.68×3.26 m' overran its column and printed as
+    # '...3.26 m620ms', which reads as a single garbled number.
+    entry = {'index': 4, 'name': 'wheels', 'count': 16, 'sent': 16,
+             'addedIds': [11], 'cleared': False, 'paceMs': 620,
+             'metres': [2.04, 0.68, 3.26]}
+    line = build.stage_line(entry, 5)
+    assert 'm620ms' not in line
+    assert '3.26 m' in line and '620ms' in line
+
+
+def test_a_world_sized_build_still_separates_its_columns():
+    # The metre column yields rather than being overrun, at any magnitude.
+    entry = {'index': 1, 'name': 'bridge', 'count': 900, 'sent': 900,
+             'addedIds': [1], 'cleared': False, 'paceMs': 620,
+             'metres': [1368.5, 1368.5, 1368.5]}
+    assert 'm620ms' not in build.stage_line(entry, 2)
+
+
+def test_a_progress_line_without_metres_is_unchanged():
+    entry = {'index': 1, 'name': 'mass', 'count': 6, 'sent': 6, 'addedIds': [1],
+             'cleared': False, 'paceMs': 0}
+    assert '×' not in build.stage_line(entry, 2)
 
 
 def test_a_progress_line_carries_the_stage_its_size_and_its_ids():
