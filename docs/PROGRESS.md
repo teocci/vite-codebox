@@ -36,6 +36,10 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 12 | A build is a thing, to the skill and to the viewer (I-5, I-6) — retroactive, see `docs/PLAN.md` note 3 | done |
 | 13 | Stop world.py asking for a cache the CLI does not have | done |
 | 14 | Make the skill mirrors provable rather than remembered | done |
+| 15 | Viewer ops — a third op category, published and relayed | planned |
+| 16 | The viewer applies agent direction, and an agent-set angle holds | planned |
+| 17 | codeblox view — presentation gets its own verb group | planned |
+| 18 | The skill learns to direct the camera | planned |
 
 ## Next action
 

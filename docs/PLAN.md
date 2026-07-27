@@ -1,7 +1,10 @@
 # Active Plan
 
-No active plan.
+**Approved:** 2026-07-27  **Branch:** main  **Cadence:** batched
 
-The last plan (R3 — two phases: P-13, P-14; two items: F-3, I-11) shipped as `v0.8.0` on 2026-07-27.
-Its one open thread — the orphaned `.agents/rules/` — was carried into `docs/PROGRESS.md`'s **Next
-action** section before this file was reset. Scaffold the next plan with `dev-phase-start`.
+| Phase | Items | Depends | Release | Version | Status |
+|-------|-------|---------|---------|---------|--------|
+| P-15 | I-12 | — | R1 | (pending) | pending |
+| P-16 | I-13 | P-15 | R1 | (pending) | pending |
+| P-17 | I-14 | P-15 | R1 | (pending) | pending |
+| P-18 | I-15 | P-15, P-16, P-17 | R1 | (pending) | pending |
