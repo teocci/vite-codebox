@@ -219,6 +219,41 @@ shapes.py bridge --span 40 --mat oak | submit.py --dry-run   # validate only
 
 `submit.py` sends one batch and reports `addedIds`. It gates bounds itself, then asks the CLI to validate types and materials. Note that `codeblox exec --dry-run` on its own is **not** a full check — the published schema types fields and says nothing about geometry, so bounds are only evaluated once a batch is actually sent. Use `submit.py`, or `build.py` for anything with more than one stage.
 
+### 7. Direct the camera
+
+`build.py` already frames what you just built. This section is for when you want a *particular* angle — a hero shot, a plan view, a walk around the massing — or want the grid and HUD out of the way for it.
+
+Five ops direct presentation. They touch no world state, so the server relays them and never stores them; `world.py` lists them with everything else, and their fields come from the contract like any other op.
+
+| op | what it does |
+|---|---|
+| `view` | snap to canned review angle `n` — front hero, silhouettes, plan, rear, bird's-eye |
+| `reframe` | refit the camera to everything in the world, dropping any focus on one build |
+| `rotate` | turntable on or off |
+| `grid` | ground grid on or off |
+| `hud` | the overlay on or off |
+
+There are two paths to them, and they are for different moments. **Imperative** — you are looking at a finished world and want it shown differently:
+
+```bash
+codeblox view 4          # a preset, by number
+codeblox view reframe
+codeblox view rotate on
+codeblox view grid off
+```
+
+**Declarative** — the angle is part of the build, so it belongs in the plan. A viewer op is a raw command like any other entry, needs no generator, and measures as no geometry, so it neither moves the scale gate nor counts toward the bounds check:
+
+```json
+{ "name": "review", "parts": [ {"op": "view", "n": 1}, {"op": "grid", "on": false} ] }
+```
+
+**Where the op goes decides what it acts on.** Within one batch the ordering is fixed for you — viewer ops apply *after* the world diff whatever their position, because framing a build you are about to `clear` is never what was meant. Across stages it is your call, and the two kinds behave differently. `reframe`, `grid`, `hud` and `rotate` act on the world as it stands when that stage lands, so they belong in a last stage if what you want is the finished thing. `view` is the opposite: the angle you set is *held* and refit as the build grows, so putting it in the first stage is the way to watch the whole build from a chosen angle instead of letting the auto-framer pick.
+
+**A viewer-only batch lands nothing, and that is success.** A `build.py` stage of viewer ops reports `no ids` where a geometry stage reports `ids 2..20`; `submit.py` reports `sent 1 command(s)` with an empty `addedIds`. Both are exit `0`. Nothing was added because nothing was meant to be — do not read the empty list as a failure and re-send.
+
+**You cannot read the viewer back.** Its state is not in `world_info` and there is no channel for it, so every toggle is an idempotent setter rather than a flip: say `rotate on` or `rotate off`, never "toggle rotate", or you are guessing at a state you cannot see. For the same reason an out-of-range preset is *refused* rather than ignored — `view 99` comes back with the valid range from the server, which is the only party that knows how many presets there are. Do not assume the count; ask for one and read the refusal, or read `world.py`.
+
 ## Coordinates
 
 Coordinates are in **blocks**, and a block is not a metre — `world.py` reports

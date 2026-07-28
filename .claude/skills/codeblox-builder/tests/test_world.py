@@ -139,18 +139,35 @@ def test_tube_rejects_an_unknown_axis():
     assert 'axis' in str(exc.value)
 
 
-@pytest.mark.parametrize('op', sorted(world.CONTROL_OPS))
-def test_control_ops_occupy_nothing(op):
-    assert world.aabb({'op': op, 'id': 1}) is None
+@pytest.mark.parametrize('op', sorted(world.NO_GEOMETRY_OPS))
+def test_ops_without_geometry_occupy_nothing(op):
+    assert world.aabb({'op': op, 'id': 1, 'n': 1, 'on': True}) is None
+
+
+def test_the_two_no_geometry_sets_do_not_overlap():
+    # They mirror two different sets in protocol.js. An op drifting into both
+    # would still work here — the union is what aabb() reads — but it would mean
+    # the mirror no longer matches the shape of what it mirrors.
+    assert not (world.CONTROL_OPS & world.VIEWER_OPS)
 
 
 def test_an_unknown_op_raises_rather_than_occupying_nothing():
-    # The whole point of the CONTROL_OPS allowlist: a part op with no anchoring
-    # rule must fail loudly. Returning None would let it past the bounds gate
-    # and out of the plan's measured extent, unseen.
+    # The whole point of the NO_GEOMETRY_OPS allowlist: a part op with no
+    # anchoring rule must fail loudly. Returning None would let it past the
+    # bounds gate and out of the plan's measured extent, unseen.
     with pytest.raises(world.WorldError) as exc:
         world.aabb({'op': 'torus', 'at': [0, 0, 0], 'r': 4})
     assert 'torus' in str(exc.value)
+
+
+def test_a_viewer_op_the_allowlist_has_not_learned_yet_still_raises():
+    # The drift this mirror is exposed to, pinned as the behaviour it produces.
+    # A sixth viewer op published by the server and not added here must raise
+    # rather than measure as nothing — that raise is what makes the drift safe
+    # to carry, and it is the F-2 design this phase must not weaken.
+    with pytest.raises(world.AnchorError) as exc:
+        world.aabb({'op': 'zoom', 'factor': 2})
+    assert 'zoom' in str(exc.value)
 
 
 # ── the bounds gate ─────────────────────────────────────────────────────────

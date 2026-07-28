@@ -140,7 +140,19 @@ def bounds_of(contract: dict) -> dict:
 # an op it does not recognise. A silent None there would let a part slip past
 # both the bounds gate and the scale gate, which is exactly how `fill` used to
 # escape unchecked.
+#
+# The split mirrors packages/shared/protocol.js, which keeps control and viewer
+# ops as two sets because "mutates the world" and "relay, don't store" are
+# different routing rules. Nothing here routes anything, so only the union is
+# used below — but keeping the two names apart is what makes this hand-written
+# mirror auditable against its source, one set against one set.
+#
+# It is a mirror, and it will drift. That is survivable only because of the
+# raise: an op published by the server but missing here fails loudly the first
+# time a plan carries it, rather than measuring as nothing.
 CONTROL_OPS = frozenset({'remove', 'clear', 'world_info', 'build_begin'})
+VIEWER_OPS = frozenset({'view', 'reframe', 'rotate', 'grid', 'hud'})
+NO_GEOMETRY_OPS = CONTROL_OPS | VIEWER_OPS
 
 AXES = ('x', 'y', 'z')
 
@@ -165,12 +177,13 @@ def aabb(command: dict) -> tuple[list[float], list[float]] | None:
         tube       like `cylinder`, but `h` runs along `axis` and the other two
                    axes take the diameter
 
-    Returns None for control ops, which occupy nothing. Raises WorldError for
-    anything else: an unrecognised op must fail loudly rather than be treated as
-    occupying nothing, or it would bypass every geometric check downstream.
+    Returns None for control and viewer ops, which occupy nothing. Raises
+    WorldError for anything else: an unrecognised op must fail loudly rather
+    than be treated as occupying nothing, or it would bypass every geometric
+    check downstream.
     '''
     op = command.get('op')
-    if op in CONTROL_OPS:
+    if op in NO_GEOMETRY_OPS:
         return None
     if op == 'box':
         at, size = command['at'], command['size']
