@@ -1,6 +1,7 @@
 import styles from './Hud.module.css'
 import { blockLabel, metres } from '@codeblox/shared/config.js'
 import { MATERIAL_NAMES } from '@codeblox/shared/materials.js'
+import { VIEW_COUNT } from '@codeblox/shared/views.js'
 
 const fmt = n => {
   const r = Math.round(n * 10) / 10
@@ -64,7 +65,7 @@ export default class Hud {
       <div class="${styles.row}"><span class="${styles.label}">grid</span><span class="${styles.value}" data-field="grid">—</span></div>
       <div class="${styles.row}"><span class="${styles.label}">materials</span><span class="${styles.value}" data-field="materials">0 / ${MATERIAL_NAMES.length}</span></div>
       <div class="${styles.row}"><span class="${styles.label}">camera</span><span class="${styles.owner}"><span class="${styles.dot}"></span><span data-field="owner">AGENT</span></span></div>
-      <div class="${styles.hint}">F reframe · R rotate · G grid · 1-6 views · H hud</div>
+      <div class="${styles.hint}">F reframe · R rotate · G grid · 1-${VIEW_COUNT} views · H hud</div>
     `
   }
 
@@ -97,8 +98,17 @@ export default class Hud {
     this.$toasts.appendChild(el)
   }
 
+  get visible() {
+    return !this.$root.classList.contains(styles.hidden)
+  }
+
+  /** Idempotent, for the same reason Grid's is: an agent cannot read this back. */
+  set visible(on) {
+    this.$root.classList.toggle(styles.hidden, !on)
+  }
+
   toggle() {
-    const visible = this.$root.classList.toggle(styles.hidden)
-    return !visible
+    this.visible = !this.visible
+    return this.visible
   }
 }

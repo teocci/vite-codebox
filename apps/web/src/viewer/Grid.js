@@ -20,8 +20,16 @@ export default class Grid {
     return this.object3d.visible
   }
 
+  // Paired with the getter so an agent can say "grid off" and mean it. A blind
+  // caller cannot read viewer state back — viewer state is not in world_info
+  // and there is no read-back channel — so a toggle is unusable to it: sending
+  // one twice lands wherever it started.
+  set visible(on) {
+    this.object3d.visible = on
+  }
+
   toggle() {
-    this.object3d.visible = !this.object3d.visible
-    return this.object3d.visible
+    this.visible = !this.visible
+    return this.visible
   }
 }

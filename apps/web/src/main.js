@@ -2,7 +2,7 @@ import './styles/variables.css'
 import './styles/global.css'
 import Viewer from './viewer/Viewer.js'
 import WsClient from './net/WsClient.js'
-import { validate, expand, contract, isPartOp } from '@codeblox/shared/protocol.js'
+import { validate, expand, contract, isPartOp, isViewerOp } from '@codeblox/shared/protocol.js'
 import { tree } from '@codeblox/shared/examples.js'
 
 const viewer = new Viewer(document.getElementById('app')).start()
@@ -18,6 +18,10 @@ const applyLocal = commands => {
   const added = []
   const removed = []
   const errors = []
+  // `viewer` is taken by the viewer instance itself; these are the ops bound for
+  // it. Collected rather than applied inline, so the offline path obeys the same
+  // after-the-diff ordering rule as the ws path.
+  const viewerOps = []
   let cleared = false
   let buildBegin = false
 
@@ -42,16 +46,22 @@ const applyLocal = commands => {
       buildBegin = true
       continue
     }
+    if (isViewerOp(cmd.op)) {
+      viewerOps.push(cmd)
+      continue
+    }
     if (isPartOp(cmd.op)) added.push(...expand(cmd))
   }
 
   const r = viewer.world.applyDiff({ added, removed, cleared, buildBegin })
+  viewer.applyViewerOps(viewerOps) // after the diff — the same rule WsClient applies
   if (errors.length) console.warn('[codeblox] rejected:', errors)
   return { ...r, errors, mode: 'local' }
 }
 
 const ws = new WsClient(viewer.world, {
   onStatus: s => viewer.hud.toast(s === 'online' ? 'server connected' : 'offline — local mode'),
+  onViewer: ops => viewer.applyViewerOps(ops),
 }).connect()
 
 // Console driver. Routes to the server when connected, else applies locally.
@@ -80,10 +90,25 @@ const driver = {
   tree(ox = 0, oz = 0) {
     return this.exec(tree(ox, oz))
   },
+  view(n) {
+    return this.exec({ op: 'view', n })
+  },
+  reframe() {
+    return this.exec({ op: 'reframe' })
+  },
+  rotate(on) {
+    return this.exec({ op: 'rotate', on })
+  },
+  grid(on) {
+    return this.exec({ op: 'grid', on })
+  },
+  hud(on) {
+    return this.exec({ op: 'hud', on })
+  },
   info() {
     return ws.contract ?? contract()
   },
 }
 
 window.codeblox = driver
-console.info('[codeblox] ready — codeblox.tree(300,0), codeblox.clear(). Run `npm start` for the server.')
+console.info('[codeblox] ready — codeblox.tree(300,0), codeblox.view(4), codeblox.clear(). Run `npm start` for the server.')

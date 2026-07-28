@@ -10,10 +10,16 @@ const BACKOFF_MAX = 8000
  * server resends a fresh snapshot, so no state is lost.
  */
 export default class WsClient {
-  constructor(world, { token, onStatus } = {}) {
+  constructor(world, { token, onStatus, onViewer } = {}) {
     this.world = world
     this.token = token
     this.onStatus = onStatus
+    // Presentation is not world state, so it is reported out the same way status
+    // is — an injected callback — rather than threaded through World.applyDiff.
+    // World.js is the block engine; five presentation ops it neither reads nor
+    // validates would be five parameters it has no business holding. buildBegin
+    // is one wart, not a pattern to extend.
+    this.onViewer = onViewer
     // Connect to the host that served the page (works local and when deployed),
     // upgrading to wss under https; only the ws port comes from config.
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
@@ -65,6 +71,11 @@ export default class WsClient {
           buildBegin: msg.buildBegin,
           animate: true,
         })
+        // This statement's position IS the protocol's ordering rule: viewer ops
+        // apply after the world diff whatever their position in the batch was,
+        // so `[{view:1}, box, clear]` lands as clear -> box -> view. Keeping it
+        // in one place is what makes the rule testable rather than emergent.
+        if (msg.viewer?.length) this.onViewer?.(msg.viewer)
         break
       case 'ack':
         if (msg.errors?.length) console.warn('[codeblox] rejected:', msg.errors)

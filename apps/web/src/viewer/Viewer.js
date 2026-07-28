@@ -121,28 +121,72 @@ export default class Viewer {
 
   // --- control surface (keyboard + driver) ---------------------------------
 
+  /**
+   * Apply the viewer ops relayed with a diff. Callers invoke this *after* the
+   * world diff has been applied — that is the protocol's ordering rule, and it
+   * is the caller's statement order that enforces it.
+   *
+   * Every op routes to the same setter the keyboard uses, so there is one
+   * behaviour per action rather than an agent path and a human path that drift.
+   */
+  applyViewerOps(ops = []) {
+    for (const cmd of ops) {
+      switch (cmd.op) {
+        case 'view':
+          // hold: the agent is directing, not taking over. See CameraDirector.
+          this.viewFrom(cmd.n, { hold: true })
+          break
+        case 'reframe':
+          this.reframe()
+          break
+        case 'rotate':
+          this.setRotate(cmd.on, { grab: false })
+          break
+        case 'grid':
+          this.setGridVisible(cmd.on)
+          break
+        case 'hud':
+          this.setHudVisible(cmd.on)
+          break
+      }
+    }
+  }
+
   reframe() {
     this._focusIds = null
     this.cameraDirector.reframe()
     this.hud.toast('reframed')
   }
 
-  toggleRotate() {
-    const on = this.cameraDirector.toggleRotate()
+  setRotate(on, opts) {
+    this.cameraDirector.setRotate(on, opts)
     this.hud.toast(`auto-rotate ${on ? 'on' : 'off'}`)
   }
 
-  toggleGrid() {
-    const on = this.grid.toggle()
+  toggleRotate() {
+    this.setRotate(!this.cameraDirector.autoRotate)
+  }
+
+  setGridVisible(on) {
+    this.grid.visible = on
     this.hud.toast(`grid ${on ? 'on' : 'off'}`)
   }
 
-  toggleHud() {
-    this.hud.toggle()
+  toggleGrid() {
+    this.setGridVisible(!this.grid.visible)
   }
 
-  viewFrom(n) {
-    const name = this.cameraDirector.viewFrom(n)
+  // No toast: it would be drawn inside the panel that just went away.
+  setHudVisible(on) {
+    this.hud.visible = on
+  }
+
+  toggleHud() {
+    this.setHudVisible(!this.hud.visible)
+  }
+
+  viewFrom(n, opts) {
+    const name = this.cameraDirector.viewFrom(n, opts)
     if (name) this.hud.toast(`view: ${name}`) // null = already in that view
   }
 

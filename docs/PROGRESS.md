@@ -1,13 +1,13 @@
 # Progress
 
 **Current version:** 0.8.0
-**Active phase:** R4 — agent-driven viewer control, five phases batched into one release. P-15
-(I-12) and P-19 (F-4) are done: the protocol has a vocabulary for directing presentation, and the
-HUD no longer widens past its panel at 1:1. P-16 (I-13) and P-17 (I-14) are unblocked and
-independent of each other; P-18 (I-15) lands last so `SKILL.md` describes only behaviour that
-already exists. 507 tests: 114 vitest, 112 Go unit, 24 Go e2e, 257 pytest (codeblox-builder, +1
-skipped) — plus 54 pytest for the `dev-phase` skill family, which is chore-track tooling and is
-counted separately.
+**Active phase:** R4 — agent-driven viewer control, five phases batched into one release. Three of
+five done: the protocol has a vocabulary for directing presentation (P-15), the viewer acts on it and
+an agent-set angle holds (P-16), and the HUD no longer widens past its panel at 1:1 (P-19). P-17
+(I-14) is unblocked; P-18 (I-15) lands last, so `SKILL.md` describes only behaviour that already
+exists, and it is the phase that closes the release. 523 tests: 130 vitest, 112 Go unit, 24 Go e2e,
+257 pytest (codeblox-builder, +1 skipped) — plus 54 pytest for the `dev-phase` skill family, which is
+chore-track tooling and is counted separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -38,18 +38,18 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 13 | Stop world.py asking for a cache the CLI does not have | done |
 | 14 | Make the skill mirrors provable rather than remembered | done |
 | 15 | Viewer ops — a third op category, published and relayed | done |
-| 16 | The viewer applies agent direction, and an agent-set angle holds | planned |
+| 16 | The viewer applies agent direction, and an agent-set angle holds | done |
 | 17 | codeblox view — presentation gets its own verb group | planned |
 | 18 | The skill learns to direct the camera | planned |
 | 19 | Split the HUD extent row so the panel stops growing | done |
 
 ## Next action
 
-**P-16 or P-17 next, and they are independent of each other** — both were waiting only on P-15's
-ops, and they touch disjoint trees (`apps/web/` vs `clients/codeblox/`), so they can run in separate
-sessions. P-16 (I-13) wires the viewer to act on the ops; P-17 (I-14) gives the CLI a `view` verb
-group. P-18 (I-15) is last by design, so `SKILL.md` documents only behaviour that already ships. R4
-is batched: one release when all five land, and P-18 is the phase that closes it.
+**P-17 (I-14), then P-18 (I-15) to close R4.** P-17 gives the CLI a `view` verb group and implements
+`bool` in the Go client — the contract already publishes the type, and `checkField` currently defers
+it to the server, so a bad flag reaches the wire instead of being refused locally. P-18 then teaches
+`world.py` and `SKILL.md` the five ops, last by design so the skill documents only behaviour that
+already ships. R4 is batched: one release when all five land, cut on P-18.
 
 One thing R3 surfaced and deliberately did not act on: **`.agents/rules/` is orphaned.** Twelve
 tracked markdown files with no source anywhere in this repo — `.claude/` tracks only `settings.json`
@@ -75,6 +75,34 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> Phase 16 (done): Made the five viewer ops do something, and gave an agent-set camera angle a way to
+> survive the build (I-13). Presentation routes around the block engine: `WsClient` gained `onViewer`
+> beside `onStatus`, fired after `world.applyDiff`. Threading five ops through `World.applyDiff` was
+> rejected — `World.js` is the block engine and would gain parameters it neither reads nor validates;
+> `buildBegin` is one wart, not a pattern to extend. Because the callback fires from a single
+> statement, the protocol's ordering rule lives in one testable place rather than being emergent, and
+> a test asserts the log reads `['diff', 'viewer']` and never the reverse. Every toggle gained an
+> idempotent setter beside it, which is forced rather than stylistic: the agent is blind — viewer
+> state is not in `world_info` and there is no read-back channel — so a toggle it sends twice lands
+> wherever it started. The keyboard now delegates to those same setters, so there is one behaviour per
+> action instead of an agent path and a human path free to drift. The change that actually alters
+> behaviour is `hold` on `viewFrom`. Forcing USER mode is right for a human pressing `1` and wrong for
+> an agent, and the cost was invisible: a build directed to view 1 framed stage 1 and let stages 2..N
+> drift out of frame, so the camera stopped following exactly when there was most to follow. Under
+> `hold` the framer stays engaged, and since `tick()` re-derives the direction from the camera's own
+> position each frame and corrects only distance and target, the chosen angle is preserved *and*
+> refit. Pinned by a pair, not a single test: bounds grow 10×, and with `hold` the angle is unchanged
+> while distance grows past 5×, while without it distance is unchanged to three decimals — one test
+> alone would not have shown that anything changed. Writing that pair caught a real subtlety rather
+> than a bug: `_framedBounds()` floors at `MIN_RADIUS_METRES`, so under the floor the framer fits the
+> floor and no growth ratio is observable; the first version asserted 5× over radii both beneath it
+> and failed at exactly 4×. The test moved, the code was right. Verified live against the running ws
+> server too — a mixed batch relayed both viewer ops alongside the box, and `view 99` came back
+> `n must be an integer 1..6` — which also ruled out the stale-server failure mode where an op exists
+> in `protocol.js` but not in the process serving it. What is **not** verified is that the browser
+> visibly snaps and holds: the relay is confirmed to the browser boundary and the camera math is unit
+> tested, but nothing headless renders here.
 
 > Phase 19 (done): Stopped the HUD panel growing across the viewport at 1:1 (F-4). The `extent` row
 > carried both unit systems in one value, which at the Golden Gate build is 41 monospace characters,

@@ -21,6 +21,21 @@ All notable changes to this project are documented here. The format follows
   the sender and the CLI's typed `Ack` drops fields it wasn't compiled for. Nothing moves on screen
   yet; that is P-16.
 
+- I-13: The viewer now acts on those ops, and an agent-set camera angle holds. `WsClient` gained an
+  `onViewer` callback beside `onStatus`, fired after `world.applyDiff` — routing presentation around
+  `World.js` rather than through it, since the block engine would otherwise gain five parameters it
+  neither reads nor validates. Every toggle gained an idempotent setter beside it (`Grid`/`Hud`
+  `set visible`, `CameraDirector.setRotate`), because the agent is blind: viewer state is not in
+  `world_info` and there is no read-back channel, so a toggle sent twice lands wherever it started.
+  The substantive change is `hold` on `viewFrom`. It used to force USER mode unconditionally, which
+  is right for a human pressing `1` and wrong for an agent — a build directed to view 1 framed stage
+  1 and let stages 2..N drift out of frame, so the camera stopped following exactly when there was
+  most to follow. Under `hold` the framer stays engaged, and because `tick()` re-derives the viewing
+  direction from the camera's own position each frame, the chosen angle is preserved *and* refit as
+  the build grows. The keyboard and the agent now go through the same setters, so there is one
+  behaviour per action instead of two that drift, and the preset keys derive from `VIEW_COUNT`
+  instead of six hardcoded cases.
+
 ### Fixed
 
 - F-4: The HUD's `extent` row no longer pushes the panel across the viewport at 1:1 scale. It carried

@@ -53,7 +53,12 @@ export default class CameraDirector {
 
   engageAgent() {
     this.mode = 'agent'
-    this.view = 'auto'
+    // Only 'free' is discarded. 'free' is what _grab() leaves behind and names
+    // no angle, but a preset name means someone chose that angle — and tick()
+    // re-derives the direction from the camera each frame, so the angle really
+    // does persist through agent framing. Relabelling it 'auto' would make the
+    // HUD say the camera is unattended when it is holding a chosen view.
+    if (this.view === 'free') this.view = 'auto'
   }
 
   /** Frame this sphere instead of the world. `null` restores whole-world framing. */
@@ -105,22 +110,44 @@ export default class CameraDirector {
     this.engageAgent()
   }
 
+  /**
+   * Idempotent, because the agent asking for it is blind: viewer state is not in
+   * world_info and there is no read-back channel, so a toggle it sends twice
+   * lands wherever it started.
+   *
+   * `grab` is why this is not just an assignment. A human pressing R wants the
+   * turntable as a review aid and the handoff is correct; an agent asking for it
+   * is directing presentation, and grabbing there would stand the auto-framer
+   * down for the rest of the build.
+   */
+  setRotate(on, { grab = true } = {}) {
+    this.controls.autoRotate = on
+    if (on && grab) this._grab()
+    return on
+  }
+
   toggleRotate() {
-    this.controls.autoRotate = !this.controls.autoRotate
-    if (this.controls.autoRotate) this._grab() // turntable is a USER-mode review aid
-    return this.controls.autoRotate
+    return this.setRotate(!this.controls.autoRotate)
   }
 
   /**
-   * Snap to a canned angle, fitted; hands control to the user. Returns the view
-   * name if it changed, or null if already in that view (so callers can skip a
-   * redundant toast).
+   * Snap to a canned angle, fitted. Returns the view name if it changed, or null
+   * if already in that view (so callers can skip a redundant toast).
+   *
+   * `hold` decides who owns the camera afterwards. For a human pressing `1` this
+   * genuinely is a handoff, so the default stands the framer down. For an agent
+   * it is not: tick() re-derives the viewing direction from the camera's own
+   * position every frame and corrects only distance and target, so an angle set
+   * in agent mode is preserved AND refit as the build grows. Without hold, a
+   * build directed to view 1 would frame stage 1 and let stages 2..N drift out
+   * of frame — the camera silently stops following exactly when there is most to
+   * follow.
    */
-  viewFrom(n) {
+  viewFrom(n, { hold = false } = {}) {
     const preset = VIEWS[n]
     if (!preset) return null
     const [azDeg, elDeg, name] = preset
-    if (this.mode === 'user' && this.view === name) return null // already there
+    if (this.view === name) return null // already there
     // Honours the focus: a canned angle reviews whatever is currently framed,
     // which right after a build is that build.
     const radius = this._framedBounds()
@@ -131,7 +158,7 @@ export default class CameraDirector {
     this.camera.position.copy(this._center).addScaledVector(this._dir, distance)
     this.controls.target.copy(this._center)
     this.controls.update()
-    this.mode = 'user'
+    this.mode = hold ? 'agent' : 'user'
     this.view = name
     return name
   }
