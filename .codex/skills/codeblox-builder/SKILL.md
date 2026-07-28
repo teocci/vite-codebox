@@ -51,7 +51,7 @@ go. Otherwise **report what it says and stop** — do not improvise a diagnosis:
 
 | exit | meaning | what to do |
 |---|---|---|
-| 2 | binary not found | `npm run install:cli`, or set `$CODEBLOX_BIN` |
+| 2 | binary not found | `python scripts/install_codeblox.py`, or set `$CODEBLOX_BIN` |
 | 3 | not authenticated | `codeblox auth login` |
 | 4 | server unreachable | start it with `npm start`, or fix the endpoint |
 

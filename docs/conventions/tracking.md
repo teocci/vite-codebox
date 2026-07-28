@@ -46,9 +46,29 @@ Non-interactive shells need the fnm install dir prepended before `npm`/`node`/`n
 $env:PATH = "C:\Users\teocci\AppData\Roaming\fnm\node-versions\v24.13.1\installation;$env:PATH"
 ```
 
-### Two Python venvs are irrelevant here
-The product is JS. The repo `.venv/` exists solely to run the `dev-phase-*` skill scripts
-(stdlib-only — no `requirements.txt`, nothing to install). It is gitignored.
+### Python runs from `.venv/`
+The product is JS, but several things here are Python, and they all use the repo `.venv/` — never
+the system interpreter. Today that is `codeblox-builder`'s own suite (258 pytest, counted in the
+product totals), the `dev-phase-*` skill scripts, and `scripts/py/`. All stdlib-only, so there is no
+`requirements.txt` and nothing to install. It is gitignored.
+
+This is not an exception to justify; it is simply where Python runs in this repo.
+
+### Mirroring the skill is a manual chore step
+`codeblox-builder` is authored once in `.claude/` and copied to `.codex/` and `.agents/`. That copy
+is **not** part of the product surface: it is not an npm script and it does not run under
+`npm test`. What deploys from this repo is the browser build and the ws server, and a stale mirror
+must never be able to fail the suite that gates them.
+
+So drift detection is deliberate rather than automatic — there is no clean event to trigger it on:
+
+```bash
+$VENV/python scripts/py/mirror_skill.py --check   # exits 1 on drift, writes nothing
+$VENV/python scripts/py/mirror_skill.py           # propagate
+```
+
+Run `--check` before committing a change to the skill, propagate, and commit the mirrors on the
+**chore track** — no version bump, no CHANGELOG, no tag.
 
 ### Repository layout (npm workspaces)
 `apps/web` (viewer, Vite's root) and `apps/server` (ws server) are **siblings** — neither app is

@@ -119,7 +119,7 @@ def test_repo_is_found_from_a_subdirectory(fake_binary, repo):
 def test_repo_without_a_built_binary_falls_through_to_the_error(repo):
     with pytest.raises(rc.ResolutionError) as exc:
         rc.find(None, {}, repo, which=never_found)
-    assert 'npm run install:cli' in str(exc.value)
+    assert rc.INSTALLER in str(exc.value)
 
 
 # ── rung 5: the actionable failure ──────────────────────────────────────────
@@ -129,9 +129,21 @@ def test_nothing_found_names_every_remedy(tmp_path):
         rc.find(None, {}, tmp_path, which=never_found)
 
     message = str(exc.value)
-    assert 'npm run install:cli' in message
+    assert rc.INSTALLER in message
     assert rc.ENV_BIN in message
     assert '--bin' in message
+
+
+def test_the_installer_the_error_names_actually_exists():
+    '''The remedy must be runnable, not just plausible.
+
+    This message named `npm run install:cli` for three releases. No such script
+    ever existed, and nothing failed — an agent that hit exit 2 was handed a
+    command that could only fail again. Naming a real path is worth nothing
+    unless something checks the path is real.
+    '''
+    repo_root = Path(__file__).resolve().parents[4]
+    assert (repo_root / rc.INSTALLER).is_file()
 
 
 # ── the version gate ────────────────────────────────────────────────────────
@@ -171,7 +183,7 @@ def test_main_exits_usage_when_nothing_resolves(monkeypatch, tmp_path, capsys):
     monkeypatch.delenv(rc.ENV_BIN, raising=False)
 
     assert rc.main([]) == rc.EXIT_USAGE
-    assert 'npm run install:cli' in capsys.readouterr().err
+    assert rc.INSTALLER in capsys.readouterr().err
 
 
 def test_main_prints_the_bare_path_by_default(monkeypatch, fake_binary, tmp_path, capsys):

@@ -12,7 +12,9 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { load } from 'js-yaml'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+// scripts/js/ -> repo root. Two levels, not one: this file moved down a
+// directory when scripts/ was split by language.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const yamlPath = join(root, 'config.yaml')
 const outPath = join(root, 'packages', 'shared', 'config.values.js')
 
@@ -35,7 +37,7 @@ const values = {
   },
 }
 
-const banner = '// AUTO-GENERATED from config.yaml by scripts/gen-config.mjs — do not edit by hand.\n'
+const banner = '// AUTO-GENERATED from config.yaml by scripts/js/gen-config.mjs — do not edit by hand.\n'
 writeFileSync(outPath, banner + 'export default ' + JSON.stringify(values, null, 2) + '\n')
 
 console.log('[codeblox] config.yaml -> packages/shared/config.values.js', values)

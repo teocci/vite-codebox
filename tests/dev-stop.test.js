@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWindowsNetstat, parseUnixLsof, parseArgs } from '../scripts/dev-stop.mjs'
+import { parseWindowsNetstat, parseUnixLsof, parseArgs } from '../scripts/js/dev-stop.mjs'
 
 describe('parseArgs', () => {
   // `npm run dev:stop -- --dry-run` forwards only the other flags: npm claims

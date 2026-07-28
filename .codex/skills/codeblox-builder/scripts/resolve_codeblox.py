@@ -39,6 +39,10 @@ ENV_BIN = 'CODEBLOX_BIN'
 BIN_NAME = 'codeblox'
 # Where `npm run build:cli` puts it, relative to the repo root.
 REPO_BIN = Path('clients') / 'codeblox' / 'bin'
+# The installer, quoted in the not-found error. Naming the real script rather
+# than an npm alias: this one exists, and it ships inside the skill, so a host
+# that only has the skill dir can still reach it.
+INSTALLER = '.claude/skills/codeblox-builder/scripts/install_codeblox.py'
 # `codeblox version` must answer within this many seconds or the file is not a
 # working binary, whatever the filesystem says.
 VERSION_TIMEOUT = 10
@@ -105,7 +109,7 @@ def find(bin_flag: str | None, env: dict[str, str], cwd: Path,
 
     raise ResolutionError(
         f'{BIN_NAME} not found. Install it with '
-        f'`npm run install:cli`, or set ${ENV_BIN} to the binary, '
+        f'`python {INSTALLER}`, or set ${ENV_BIN} to the binary, '
         f'or pass --bin PATH. Looked on $PATH and in <repo>/{REPO_BIN.as_posix()}/.'
     )
 

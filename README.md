@@ -97,7 +97,9 @@ never written to the settings file and is masked everywhere it is printed. `code
 shows what is stored, `codeblox auth logout` removes it.
 
 If the binary is not on your `PATH`, call it by path (`clients/codeblox/bin/codeblox.exe` on
-Windows) or run `npm run install:cli` to register it on the User `PATH`.
+Windows) or run `.venv/Scripts/python .claude/skills/codeblox-builder/scripts/install_codeblox.py`
+to register it on the User `PATH`. Pass `--dry-run` first — it is the only step that changes
+anything outside the repo.
 
 Once `auth status` is green, the skill's preflight should pass:
 
@@ -136,7 +138,7 @@ which is useful for an ad-hoc server: `npm run dev:stop -- 7801`.
 > stripped, verified by probe. `npm run dev:stop -- --list` would therefore kill everything while
 > looking like a dry run — which is exactly why `dev:list` is its own script with the flag baked in.
 > Flags behave normally when node runs the script directly:
-> `node scripts/dev-stop.mjs --list --json 7801`.
+> `node scripts/js/dev-stop.mjs --list --json 7801`.
 
 A held lock is not hypothetical: a running Vite dev server keeps a handle on `apps/web/src`, and
 `git mv` on it fails with `Permission denied` until the server is stopped.
@@ -162,7 +164,9 @@ vite-codebox/
 │                             # config, materials, families, protocol
 ├── clients/
 │   └── codeblox/             # Go CLI (the agent's hands); builds to bin/
-├── scripts/gen-config.mjs    # config.yaml -> packages/shared/config.values.js
+├── scripts/
+│   ├── js/                   # gen-config (config.yaml -> config.values.js), dev-stop
+│   └── py/                   # mirror_skill — copies the skill to the other agent dot-dirs
 ├── tests/                    # vitest, covering apps/ and packages/
 ├── config.yaml               # the one place to change block size, world, ports
 └── vite.config.js            # root: apps/web, build.outDir: ../../dist

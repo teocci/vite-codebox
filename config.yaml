@@ -1,6 +1,6 @@
 # codeblox configuration — the human-editable source of truth.
 #
-# Compiled to shared/config.values.js by scripts/gen-config.mjs (runs on
+# Compiled to shared/config.values.js by scripts/js/gen-config.mjs (runs on
 # install / dev / build / test). Nothing reads environment variables or a .env
 # file — this YAML is the only place to change these values.
 

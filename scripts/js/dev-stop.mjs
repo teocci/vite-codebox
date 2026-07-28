@@ -18,8 +18,8 @@
  * flag baked in.
  *
  * Flags work normally when node runs the script directly:
- *   node scripts/dev-stop.mjs --list --json 7801
- *   node scripts/dev-stop.mjs --dry-run          # alias for --list
+ *   node scripts/js/dev-stop.mjs --list --json 7801
+ *   node scripts/js/dev-stop.mjs --dry-run          # alias for --list
  *
  * Multiple owners are the normal case: a stale server from an earlier session
  * can hold a port while a fresh `npm start` runs, and the tree kill also takes

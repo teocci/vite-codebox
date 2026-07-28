@@ -6,9 +6,14 @@ five done: the protocol has a vocabulary for directing presentation (P-15), the 
 an agent-set angle holds (P-16), the CLI has a `view` verb group and a real `bool` type (P-17), and
 the HUD no longer widens past its panel at 1:1 (P-19). Only P-18 (I-15) remains — the skill's turn,
 last by design so `SKILL.md` describes only behaviour that already ships, and the phase that closes
-the release. 538 tests: 130 vitest, 127 Go unit, 24 Go e2e, 257 pytest (codeblox-builder, +1 skipped)
-— plus 54 pytest for the `dev-phase` skill family, which is chore-track tooling and is counted
-separately.
+the release. 535 tests: 126 vitest, 127 Go unit, 24 Go e2e, 258 pytest (codeblox-builder, +1
+skipped) — plus 58 chore-track pytest counted separately (54 `dev-phase`, 4 `scripts/py`).
+
+The vitest count dropped 130 → 126 without losing coverage: `tests/skill-mirrors.test.js` was
+deleted because skill mirroring left the product surface entirely. `vite.config.js` globs
+`tests/**`, so a stale `.codex/` copy could fail the suite that gates shipping the servers — which
+the skill is no part of. Drift is now `scripts/py/mirror_skill.py --check`, run by hand before a
+commit that touched the skill. See `docs/conventions/tracking.md`.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -51,7 +56,9 @@ last by design so the skill documents only behaviour that already ships. The dri
 known and accepted: that frozenset is a hand-maintained mirror of the JS sets, and F-2's design is
 what makes it safe — an op *missing* from it makes `aabb()` raise `AnchorError` rather than silently
 returning `None` and bypassing the bounds and scale gates. A test must pin that raise. It will also
-need `npm run sync:skills`, or the P-14 mirror test goes red.
+need the mirrors propagated — `$VENV/python scripts/py/mirror_skill.py` — and **nothing in
+`npm test` will remind you** any more, because the drift test was deliberately removed from the
+product suite. Run `--check` before committing.
 
 **At release time, two version sites must move together.** `cut_release.py` bumps `package.json`; the
 Go CLI's `command.Version` constant is separate and manual. It drifted once already (the CLI still
@@ -81,7 +88,10 @@ than silently, but it is blocked. This is the gate on running the server anywher
 
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
-`npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+`$VENV/python .claude/skills/codeblox-builder/scripts/install_codeblox.py`; everything works today
+through the resolver's repo-checkout rung. (That invocation was written as `npm run install:cli` in
+three releases' worth of docs, including the shipped SKILL.md and the resolver's own not-found
+error. No such npm script ever existed — a test now asserts the path the error names is real.)
 
 > Phase 17 (done): Gave presentation its own verb group and the contract a real `bool` (I-14).
 > `codeblox view N | reframe | rotate|grid|hud on|off` lives in a new `dispatch_view.go` following

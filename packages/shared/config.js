@@ -2,7 +2,7 @@
  * Engine units and world config — the single source of truth for VALUES.
  *
  * The values come from config.yaml, compiled to ./config.values.js by
- * scripts/gen-config.mjs (run on install / predev / prebuild / pretest). Both the
+ * scripts/js/gen-config.mjs (run on install / predev / prebuild / pretest). Both the
  * browser viewer and the Node server import the same module — no environment
  * variables, no .env, just file-based config that works on any host.
  *
