@@ -1,10 +1,10 @@
 # Phase 18 — The skill learns to direct the camera
 
 - **Phase ID:** 18
-- **Version:** (pending)
-- **Date:** (pending)
-- **Tests:** (pending)
-- **Status:** 🚧 IN PROGRESS
+- **Version:** 0.9.0
+- **Date:** 2026-07-28
+- **Tests:** 542
+- **Status:** ✅ DONE (542 tests; live-verified).
 
 ## Objective
 

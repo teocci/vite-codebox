@@ -1,10 +1,10 @@
 # Phase 16 — The viewer applies agent direction, and an agent-set angle holds
 
 - **Phase ID:** 16
-- **Version:** (pending)
-- **Date:** (pending)
-- **Tests:** (pending)
-- **Status:** 🚧 IN PROGRESS
+- **Version:** 0.9.0
+- **Date:** 2026-07-28
+- **Tests:** 542
+- **Status:** ✅ DONE (542 tests; live-verified).
 
 ## Objective
 

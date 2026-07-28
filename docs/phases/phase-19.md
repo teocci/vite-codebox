@@ -1,10 +1,10 @@
 # Phase 19 — Split the HUD extent row so the panel stops growing
 
 - **Phase ID:** 19
-- **Version:** (pending)
-- **Date:** (pending)
-- **Tests:** (pending)
-- **Status:** 🚧 IN PROGRESS
+- **Version:** 0.9.0
+- **Date:** 2026-07-28
+- **Tests:** 542
+- **Status:** ✅ DONE (542 tests; live-verified).
 
 ## Objective
 

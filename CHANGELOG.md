@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-28
+
+agent-directed presentation: viewer ops from protocol to CLI to skill, and an angle that holds
+
 ### Added
 
 - I-12: Five viewer ops — `view`, `reframe`, `rotate`, `grid` and `hud` — in a third op category the
@@ -48,6 +52,22 @@ All notable changes to this project are documented here. The format follows
   not rotate, with the reason buried in an ack the CLI drops. It now exits 5 with nothing sent.
   `view.n` stays `int+`, so an out-of-range preset is forwarded and refused by the server — the only
   party that knows how many presets exist.
+
+- I-15: The builder skill can now direct the camera. `world.py` learned the five viewer ops as a
+  second no-geometry set beside the control ops, unioned into `NO_GEOMETRY_OPS`, so a plan stage can
+  carry `{"op":"view","n":1}` and it measures as nothing — neither moving the scale gate nor
+  counting toward the bounds check. Keeping the two sets apart rather than widening one mirrors
+  `protocol.js`, which holds them apart because "mutates the world" and "relay, don't store" are
+  different routing rules; it makes this hand-written mirror auditable set-for-set. No new script was
+  needed, and that is the finding rather than an omission: `expand_part` already passed any dict
+  carrying an `op` through verbatim and `check_stage` already accepted a raw op as a part, so the
+  declarative path existed the moment `aabb()` stopped raising on it. `SKILL.md` gained a section on
+  the two paths — `codeblox view` when you are looking at a finished world, a plan stage when the
+  angle is part of the build — and on the distinction that decides where an op goes: `reframe`,
+  `grid`, `hud` and `rotate` act on the world as it stands when their stage lands, while a `view` is
+  held and refit as the build grows, so it belongs first rather than last. F-2's guarantee is
+  untouched and now pinned for viewer ops too: an op absent from the allowlist raises rather than
+  measuring as nothing, which is what makes a hand-maintained mirror safe to carry.
 
 ### Fixed
 

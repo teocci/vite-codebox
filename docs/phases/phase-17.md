@@ -1,10 +1,10 @@
 # Phase 17 — codeblox view — presentation gets its own verb group
 
 - **Phase ID:** 17
-- **Version:** (pending)
-- **Date:** (pending)
-- **Tests:** (pending)
-- **Status:** 🚧 IN PROGRESS
+- **Version:** 0.9.0
+- **Date:** 2026-07-28
+- **Tests:** 542
+- **Status:** ✅ DONE (542 tests; live-verified).
 
 ## Objective
 

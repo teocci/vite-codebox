@@ -1,13 +1,14 @@
 # Progress
 
-**Current version:** 0.8.0
-**Active phase:** R4 — agent-driven viewer control, five phases batched into one release. Four of
-five done: the protocol has a vocabulary for directing presentation (P-15), the viewer acts on it and
-an agent-set angle holds (P-16), the CLI has a `view` verb group and a real `bool` type (P-17), and
-the HUD no longer widens past its panel at 1:1 (P-19). Only P-18 (I-15) remains — the skill's turn,
-last by design so `SKILL.md` describes only behaviour that already ships, and the phase that closes
-the release. 535 tests: 126 vitest, 127 Go unit, 24 Go e2e, 258 pytest (codeblox-builder, +1
-skipped) — plus 58 chore-track pytest counted separately (54 `dev-phase`, 4 `scripts/py`).
+**Current version:** 0.9.0
+**Active phase:** none — R4 shipped as v0.9.0 and the plan is drained. Agent-driven viewer control
+landed end to end across five phases: the protocol has a vocabulary for directing presentation
+(P-15), the viewer acts on it and an agent-set angle holds (P-16), the CLI has a `view` verb group
+and a real `bool` type (P-17), the skill can put a viewer op in a plan stage (P-18), and the HUD no
+longer widens past its panel at 1:1 (P-19). 542 tests: 126 vitest, 126 Go unit, 23 Go e2e, 267
+pytest (codeblox-builder) — plus 58 chore-track pytest counted separately (54 `dev-phase`, 4
+`scripts/py`). Two tests skip rather than fail and are excluded from that total: one Go credential
+test that asserts POSIX file permissions, and one pytest.
 
 The vitest count dropped 130 → 126 without losing coverage: `tests/skill-mirrors.test.js` was
 deleted because skill mirroring left the product surface entirely. `vite.config.js` globs
@@ -21,6 +22,14 @@ commit that touched the skill. See `docs/conventions/tracking.md`.
 > Counts here are **top-level `func Test…`**, which is the method that reproduces the v0.5.0 unit
 > figure of 107; counting subtests instead gives a much larger number. The v0.5.0 line is left as
 > published rather than rewritten after the fact.
+>
+> Two terms were re-measured at v0.9.0 and both moved down by one against what was previously
+> published. The Go unit suite has **127** top-level functions but **126** passing —
+> `TestFileBackendWritesOwnerOnlyPermissions` skips on Windows, since it asserts POSIX `0600`. And the
+> e2e suite has **23** top-level functions, not the 24 carried since v0.5.0; `-v` output shows 28
+> `=== RUN Test…` lines, of which 5 are subtests, which is the most likely origin of the older figure.
+> Totals from v0.9.0 on count **passing** tests and name skips separately, which is what the pytest
+> term already did with its `(+1 skipped)`.
 
 Test commands: `npm test` (vitest) · `npm run test:cli` (Go unit) · `npm run test:e2e` (Go
 integration, `//go:build integration`, skips the world tests when no server is listening).
@@ -46,24 +55,28 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 15 | Viewer ops — a third op category, published and relayed | done |
 | 16 | The viewer applies agent direction, and an agent-set angle holds | done |
 | 17 | codeblox view — presentation gets its own verb group | done |
-| 18 | The skill learns to direct the camera | planned |
+| 18 | The skill learns to direct the camera | done |
 | 19 | Split the HUD extent row so the panel stops growing | done |
 
 ## Next action
 
-**P-18 (I-15) closes R4.** It teaches `world.py`'s no-geometry frozenset and `SKILL.md` the five ops,
-last by design so the skill documents only behaviour that already ships. The drift risk it carries is
-known and accepted: that frozenset is a hand-maintained mirror of the JS sets, and F-2's design is
-what makes it safe — an op *missing* from it makes `aabb()` raise `AnchorError` rather than silently
-returning `None` and bypassing the bounds and scale gates. A test must pin that raise. It will also
-need the mirrors propagated — `$VENV/python scripts/py/mirror_skill.py` — and **nothing in
-`npm test` will remind you** any more, because the drift test was deliberately removed from the
-product suite. Run `--check` before committing.
+**No active plan.** R4 is released and `docs/PLAN.md` is back to its stub; the next work needs
+scaffolding through `dev-phase-start` before anything is implemented.
+
+**The drift R4 leaves behind is deliberate and now unguarded by the suite.** `world.py`'s
+`NO_GEOMETRY_OPS` is a hand-maintained mirror of `protocol.js`'s `CONTROL_OPS` + `VIEWER_OPS`, and
+the `.codex/` / `.agents/` skill copies are a hand-triggered mirror of `.claude/`. Neither is checked
+by `npm test` — the mirror test was removed in P-14's follow-up when skill mirroring left the product
+surface. What makes the first safe is F-2's raise, pinned by a test: an op absent from the allowlist
+fails loudly on first use rather than measuring as nothing. What makes the second safe is nothing
+automatic — run `$VENV/python scripts/py/mirror_skill.py --check` before any commit that touched the
+skill.
 
 **At release time, two version sites must move together.** `cut_release.py` bumps `package.json`; the
 Go CLI's `command.Version` constant is separate and manual. It drifted once already (the CLI still
 said `0.3.0` at v0.4.0), and it matters because `resolve_codeblox.py` runs `codeblox version` as its
-health check, so a stale constant misreports which binary is in use.
+health check, so a stale constant misreports which binary is in use. Bumped by hand to `0.9.0` in
+this release.
 
 One thing R3 surfaced and deliberately did not act on: **`.agents/rules/` is orphaned.** Twelve
 tracked markdown files with no source anywhere in this repo — `.claude/` tracks only `settings.json`
@@ -92,6 +105,34 @@ PATH is the one irreversible-ish step in the skill and is left to be triggered d
 through the resolver's repo-checkout rung. (That invocation was written as `npm run install:cli` in
 three releases' worth of docs, including the shipped SKILL.md and the resolver's own not-found
 error. No such npm script ever existed — a test now asserts the path the error names is real.)
+
+> Phase 18 (done): Taught the skill to direct the camera, and closed R4 (I-15). `world.py` gained
+> `VIEWER_OPS` beside `CONTROL_OPS` with `NO_GEOMETRY_OPS` as their union, which is what `aabb()`
+> reads. Splitting rather than widening one frozenset costs a line and buys an audit: `protocol.js`
+> holds the two sets apart because "mutates the world" and "relay, don't store" are different routing
+> rules, and a hand-written mirror is checkable set-for-set but not as nine names read by eye. The
+> finding of the phase is that **no new script was needed**, and it was not an omission — `build.py`'s
+> `expand_part` already passed any dict carrying an `op` through verbatim, and `check_stage`'s "at
+> least one part" was already satisfied by a raw op, so the declarative path existed in full the
+> moment `aabb()` stopped raising on a viewer op. A `view.py` would have emitted a JSON literal and
+> removed no probabilistic failure; `world.py`'s `digest()` already reflects the published ops and
+> their fields back to the agent. What was actually missing was one measurement rule and the prose.
+> `SKILL.md` gained §7: the five ops, `codeblox view` as the imperative path and a plan stage as the
+> declarative one, and the distinction that decides placement — `reframe`/`grid`/`hud`/`rotate` act on
+> the world as it stands when their stage lands, while a `view` is held and refit as the build grows
+> (P-16's `hold`), so it belongs *first*, not last. F-2 is untouched and now pinned on this side too:
+> a test asserts an unlisted *viewer* op raises `AnchorError` rather than measuring as nothing, which
+> is the whole reason a hand-maintained mirror is safe to carry — drift fails loudly on first use
+> instead of silently disabling the bounds and scale gates. Landing last earned its keep on exactly
+> the failure it was sequenced against: the approach had written into `SKILL.md` that a viewer-only
+> batch reports `0 added, 0 removed`, and the live run showed nothing prints that string — `build.py`
+> prints `no ids` on the stage line, `submit.py` prints `sent 1 command(s)` with an empty `addedIds`.
+> One sentence written from memory rather than from output, caught only because the phase was ordered
+> to describe shipped behaviour. Verified live against the running server: `{"op":"zoom"}` refused at
+> exit 5 by the client, `view 99` refused at exit 6 by the server (I-14's design holding — the client
+> forwards `n` because it is `int+`, and only the server knows there are six presets), and a two-stage
+> plan landed with the geometry stage reporting ids and the review stage reporting none. Not verified:
+> that the browser visibly snaps to preset 4 — same boundary as P-16, no headless renderer here.
 
 > Phase 17 (done): Gave presentation its own verb group and the contract a real `bool` (I-14).
 > `codeblox view N | reframe | rotate|grid|hud on|off` lives in a new `dispatch_view.go` following
