@@ -7,10 +7,34 @@ const fmt = n => {
   return Number.isInteger(r) ? String(r) : r.toFixed(1)
 }
 
+// Spaces around the separator are load-bearing, not decoration: they are the
+// break opportunities that let a long triple wrap inside a bounded panel
+// instead of widening it. A bare `×` makes the whole triple one unbreakable
+// word, which is what `136850×11350×136850` was.
+const TIMES = ' × '
+
 /**
- * Legend overlay: the reviewer's orientation. Kept tight — parts, extent (blocks
- * and metres), grid, materials used, and who owns the camera. All values are
- * engine-internal, so textContent is safe (no untrusted HTML).
+ * The extent in metres, exact. Never abbreviated — the scale gate (I-8) exists
+ * to compare a build against the real subject's dimensions, and "2.7k m" cannot
+ * be checked against 2737 m.
+ */
+export const extentMetresText = ([x, y, z]) =>
+  `${fmt(metres(x))}${TIMES}${fmt(metres(y))}${TIMES}${fmt(metres(z))} m`
+
+/** The same extent in whole blocks. Always 1/BLOCK_SIZE × the metre triple. */
+export const extentBlocksText = ([x, y, z]) =>
+  `${Math.round(x)}${TIMES}${Math.round(y)}${TIMES}${Math.round(z)}`
+
+/**
+ * Legend overlay: the reviewer's orientation. Kept tight — parts, extent in
+ * metres, the same extent in blocks, grid, materials used, and who owns the
+ * camera. All values are engine-internal, so textContent is safe (no untrusted
+ * HTML).
+ *
+ * Extent gets two rows rather than one because BLOCK_SIZE is 0.02: the block
+ * triple is by construction 50× the metre triple, so once either is large both
+ * are, and no single row can hold them. One row fit only the 64 m world that
+ * shipped before P-11.
  */
 export default class Hud {
   constructor($container) {
@@ -36,6 +60,7 @@ export default class Hud {
       </div>
       <div class="${styles.row}"><span class="${styles.label}">parts</span><span class="${styles.value}" data-field="parts">0</span></div>
       <div class="${styles.row}"><span class="${styles.label}">extent</span><span class="${styles.value}" data-field="extent">—</span></div>
+      <div class="${styles.row}"><span class="${styles.label}">blocks</span><span class="${styles.value}" data-field="blocks">—</span></div>
       <div class="${styles.row}"><span class="${styles.label}">grid</span><span class="${styles.value}" data-field="grid">—</span></div>
       <div class="${styles.row}"><span class="${styles.label}">materials</span><span class="${styles.value}" data-field="materials">0 / ${MATERIAL_NAMES.length}</span></div>
       <div class="${styles.row}"><span class="${styles.label}">camera</span><span class="${styles.owner}"><span class="${styles.dot}"></span><span data-field="owner">AGENT</span></span></div>
@@ -55,9 +80,8 @@ export default class Hud {
     this._sig = sig
 
     this.$('parts').textContent = String(stats.count)
-    this.$('extent').textContent = stats.count
-      ? `${Math.round(ex)}×${Math.round(ey)}×${Math.round(ez)} blk · ${fmt(metres(ex))}×${fmt(metres(ey))}×${fmt(metres(ez))} m`
-      : '—'
+    this.$('extent').textContent = stats.count ? extentMetresText(stats.extent) : '—'
+    this.$('blocks').textContent = stats.count ? extentBlocksText(stats.extent) : '—'
     this.$('materials').textContent = `${stats.materialsUsed} / ${MATERIAL_NAMES.length}`
 
     const isUser = cam.mode === 'user'

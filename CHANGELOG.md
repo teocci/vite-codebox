@@ -21,6 +21,19 @@ All notable changes to this project are documented here. The format follows
   the sender and the CLI's typed `Ack` drops fields it wasn't compiled for. Nothing moves on screen
   yet; that is P-16.
 
+### Fixed
+
+- F-4: The HUD's `extent` row no longer pushes the panel across the viewport at 1:1 scale. It carried
+  both unit systems in one value, which at the Golden Gate build rendered as 41 monospace characters
+  — and since `BLOCK_SIZE` is `0.02` the block triple is *by construction* 50× the metre triple, so
+  the two can never both be short again. It is now two rows, `extent` in metres and `blocks` in
+  integers. The separator also gained spaces (`' × '`), which is what makes the new `max-width: 20rem`
+  on `.hud` a cap rather than an overflow: `136850×11350×136850` is one unbreakable word to the
+  line-breaker, so no width could contain it, while a spaced triple wraps at its own separators.
+  Abbreviating the numbers was rejected — `2.7k m` cannot be compared against a real subject's
+  2737 m, and that comparison is exactly what the I-8 scale gate exists to make. Same class as I-10:
+  viewer literals tuned for a world size that no longer ships.
+
 ## [0.8.0] - 2026-07-27
 
 the mirrors and the docs stop lying — a drift test for the shipped skill, and a refresh flag that never worked, removed

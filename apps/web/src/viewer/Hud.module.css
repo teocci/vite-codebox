@@ -3,6 +3,10 @@
   top: var(--space-lg);
   left: var(--space-lg);
   min-width: 15rem;
+  /* The panel is a legend, not a document: bounded so no value can widen it
+     across the viewport, which is what an unbounded min-width allowed. Values
+     wrap inside the cap instead. */
+  max-width: 20rem;
   padding: var(--space-md) var(--space-lg);
   background: var(--color-panel);
   border: 1px solid var(--color-border);
@@ -56,6 +60,10 @@
   font-family: var(--font-mono);
   color: var(--color-value);
   text-align: right;
+  /* A flex item's default min-width is min-content, which here is the longest
+     single number rather than the whole triple — so a spaced triple wraps at
+     its separators and the row shrinks to fit the cap. */
+  min-width: 0;
 }
 
 .owner {

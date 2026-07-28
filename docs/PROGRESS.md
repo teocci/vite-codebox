@@ -2,11 +2,12 @@
 
 **Current version:** 0.8.0
 **Active phase:** R4 — agent-driven viewer control, five phases batched into one release. P-15
-(I-12) is done: the protocol has a vocabulary for directing presentation. P-16 (I-13) and P-17
-(I-14) are unblocked and independent of each other; P-19 (F-4, the HUD extent row) never depended
-on anything; P-18 (I-15) lands last so `SKILL.md` describes only behaviour that already exists.
-502 tests: 109 vitest, 112 Go unit, 24 Go e2e, 257 pytest (codeblox-builder, +1 skipped) — plus 54
-pytest for the `dev-phase` skill family, which is chore-track tooling and is counted separately.
+(I-12) and P-19 (F-4) are done: the protocol has a vocabulary for directing presentation, and the
+HUD no longer widens past its panel at 1:1. P-16 (I-13) and P-17 (I-14) are unblocked and
+independent of each other; P-18 (I-15) lands last so `SKILL.md` describes only behaviour that
+already exists. 507 tests: 114 vitest, 112 Go unit, 24 Go e2e, 257 pytest (codeblox-builder, +1
+skipped) — plus 54 pytest for the `dev-phase` skill family, which is chore-track tooling and is
+counted separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -40,15 +41,15 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 16 | The viewer applies agent direction, and an agent-set angle holds | planned |
 | 17 | codeblox view — presentation gets its own verb group | planned |
 | 18 | The skill learns to direct the camera | planned |
-| 19 | Split the HUD extent row so the panel stops growing | planned |
+| 19 | Split the HUD extent row so the panel stops growing | done |
 
 ## Next action
 
 **P-16 or P-17 next, and they are independent of each other** — both were waiting only on P-15's
-ops. P-16 (I-13) wires the viewer to act on them; P-17 (I-14) gives the CLI a `view` verb group.
-P-19 (F-4, the HUD extent row) depends on nothing and can be taken at any point. P-18 (I-15) is last
-by design, so `SKILL.md` documents only behaviour that already ships. R4 is batched: one release
-when all five land.
+ops, and they touch disjoint trees (`apps/web/` vs `clients/codeblox/`), so they can run in separate
+sessions. P-16 (I-13) wires the viewer to act on the ops; P-17 (I-14) gives the CLI a `view` verb
+group. P-18 (I-15) is last by design, so `SKILL.md` documents only behaviour that already ships. R4
+is batched: one release when all five land, and P-18 is the phase that closes it.
 
 One thing R3 surfaced and deliberately did not act on: **`.agents/rules/` is orphaned.** Twelve
 tracked markdown files with no source anywhere in this repo — `.claude/` tracks only `settings.json`
@@ -74,6 +75,26 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> Phase 19 (done): Stopped the HUD panel growing across the viewport at 1:1 (F-4). The `extent` row
+> carried both unit systems in one value, which at the Golden Gate build is 41 monospace characters,
+> and `.hud` had a `min-width` with no upper bound — the row is what tripped it, the missing cap is
+> why there was no floor. The split into `extent` (metres) and `blocks` (integers) is forced rather
+> than chosen: `BLOCK_SIZE` is `0.02`, so the block triple is *by construction* 50× the metre triple,
+> and once either is large both are. One row only ever fit the 64 m world that shipped before P-11 —
+> same class as I-10, viewer literals tuned for a world size that no longer ships. The detail that
+> actually makes the fix work is the smallest one: the separator went from `×` to `' × '`. Without
+> the spaces the triple is a single unbreakable word and no `max-width` can contain it, so the cap
+> would have been an overflow; with them the value wraps at its own separators, and `min-width: 0` on
+> `.value` lets the flex item shrink to that wrapped width rather than holding its `min-content`
+> floor. Abbreviation was rejected on arithmetic, not taste: `2.7k m` cannot be compared against a
+> real subject's 2737 m, and that comparison is precisely what the I-8 scale gate exists to make, so
+> the metre row is load-bearing and every digit stays. The two formatters were lifted out of
+> `update()` as pure exported functions because `vite.config.js` sets `environment: 'node'` — there
+> is no DOM to assert against, and the string is the part that can regress. Verified as far as this
+> setup allows and no further: 5 new tests pin the strings, and both new CSS rules are present in the
+> emitted `dist/assets/*.css`, but the rendered panel was **not** observed in a browser — the repo
+> carries no headless-browser tooling and adding one is chore-track work.
 
 > Phase 15 (done): Gave the protocol a vocabulary for directing presentation, and opened R4 (I-12).
 > Five viewer ops — `view`, `reframe`, `rotate`, `grid`, `hud` — in a third category beside
