@@ -25,11 +25,12 @@ skill reads it, then applies project overrides from `docs/conventions/tracking.m
    |---|---|
    | Work is **not a product iteration** (tooling / `.claude/` / meta-docs / CI) | → **chore track**: commit plainly, no `dev-phase-complete` (below) |
    | No active plan / user approved a plan / "start" | → **branch guard** (branch mode): if on `<RELEASE_BRANCH>`, create the `feat/*` branch first (§7b); then run **`dev-phase-start`** to scaffold |
+   | Work is discovered **while a plan is active** (a second plan) | → run **`dev-phase-start`** again: it appends the new group and never touches the existing rows. Use `depends` to make it wait on a current phase, `defers` to make current phases wait on it (§6.5) |
    | User asks "where/status" | → run **`dev-phase-status`** (report only) |
    | User wants to finalize/release a worked phase | → run **`dev-phase-complete`** (release integrates to `<RELEASE_BRANCH>` — §7b) |
    | **NEXT** and the just-worked phase is finalized | → **advance** (below) |
    | **NEXT** but the current phase closes a release group and isn't `released` | → **refuse**; point at `dev-phase-complete` Part B |
-   | All plan rows `released` | → report plan complete; **drain-branch**: the branch is already integrated per release — delete the merged `feat/*` branch + prune any worktree (§7b), then reset `PLAN.md` to the `No active plan.` stub |
+   | All plan rows `released` | → report plan complete; **drain-branch**: the branch is already integrated per release — delete the merged `feat/*` branch + prune any worktree (§7b), then reset `PLAN.md` to the `No active plan.` stub. `dev-phase-start` **refuses** to scaffold on a fully-released ledger until this is done |
 
 ## Release track vs chore track (route before finalizing)
 Before treating any work as a release, apply the decision rule (base conventions §6b):

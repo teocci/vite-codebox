@@ -51,7 +51,7 @@ carry a bigger phase than a 250K model. When decomposing:
 | Stage | Skill | Mutates? | What happens |
 |---|---|---|---|
 | Decompose & order (plan mode) | `dev-phase-workflow` | no | Propose phase breakdown + execution order + parallel groups |
-| Scaffold | `dev-phase-start` | docs only | Allocate ids, create detail stubs, index rows, write `<PLAN>` |
+| Scaffold | `dev-phase-start` | docs only | Allocate ids, create detail stubs, index rows, write/extend `<PLAN>` |
 | Observe | `dev-phase-status` | no | Report state + coherence; surface drift |
 | Finalize a phase | `dev-phase-complete` (A) | docs | Fill details, mark done, accrue `<CHANGELOG>` Unreleased |
 | Cut a release | `dev-phase-complete` (B) | docs + git | Bump version, roll changelog, index release; **integrate to `<RELEASE_BRANCH>` (branch mode)**, commit/tag/push there |
@@ -157,7 +157,13 @@ real version.
 - `Status ∈ {pending, in-progress, done, released}`. `Depends` is `—` or a comma-list of phase ids.
 - `Release` groups phases into releases (a shared tag = batched cadence; unique tags = per-phase).
 - **Cursor** = the topmost row not yet `released` whose `Depends` are all `done`.
-- When every row is `released`, reset the file to a `No active plan.` stub.
+- When every row is `released`, reset the file to a `No active plan.` stub. That reset is the last
+  step of the §7b drain, and the model runs it — no script does it.
+- **The ledger may hold more than one plan.** Work discovered mid-flight is scaffolded as a second
+  group of rows with its own `Release` tags; `Depends` orders the two groups against each other, and
+  the cursor falls out of the DAG. `dev-phase-start` **appends** — it never rewrites a row it did not
+  create — and refuses outright on a ledger that is fully `released` (drain it first) or that does
+  not parse. So re-running scaffold against an active plan is safe and additive.
 
 ### 6.6 `<RELEASE_INDEX>` (release → phases, internal)
 `| Release | Date | Phases | Theme |`, newest first. One row per cut release. The detailed
