@@ -15,7 +15,7 @@ const OPEN = 1 // ws.readyState
  *   client -> { type:'hello', token? }         (first message; gates the connection)
  *   server -> { type:'welcome', contract, parts }   (contract + full snapshot)
  *   client -> { type:'commands', batch:[...] }
- *   server -> { type:'diff', added, removed, cleared, buildBegin }   (broadcast to all)
+ *   server -> { type:'diff', added, removed, cleared, buildBegin, viewer }   (broadcast to all)
  *   server -> { type:'ack', addedIds, removed, cleared, buildBegin, errors }   (to the sender)
  *   server -> { type:'error', message }         (before an auth rejection close)
  */
@@ -67,6 +67,10 @@ export function createServer({ host = '127.0.0.1', port = 8787, authRequired = f
           removed: r.removed,
           cleared: r.cleared,
           buildBegin: r.buildBegin,
+          // Broadcast only, not on the ack: broadcast() already includes the
+          // sender, and the CLI's typed Ack drops fields it wasn't compiled for
+          // (it has silently dropped buildBegin since P-12).
+          viewer: r.viewer,
         })
         ws.send(JSON.stringify({
           type: 'ack',

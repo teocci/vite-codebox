@@ -100,6 +100,67 @@ describe('ws server', () => {
     expect((await ackP).buildBegin).toBe(false)
   })
 
+  it('relays a viewer op to every client without touching the store', async () => {
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const b = await connect(srv.port())
+    const aDiff = a.nextDiff()
+    const bDiff = b.nextDiff()
+    a.send([{ op: 'view', n: 4 }])
+    const [da, db] = await Promise.all([aDiff, bDiff])
+
+    expect(da.viewer).toEqual([{ op: 'view', n: 4 }])
+    expect(db.viewer).toEqual([{ op: 'view', n: 4 }]) // the reviewer's tab is often not the sender
+    expect(da.added).toHaveLength(0)
+    expect(srv.store.size).toBe(0)
+  })
+
+  it('carries viewer ops alongside the parts of the same batch', async () => {
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const diff = a.nextDiff()
+    a.send([
+      { op: 'rotate', on: true },
+      { op: 'box', at: [0, 0, 0], size: [2, 2, 2], mat: 'oak' },
+      { op: 'hud', on: false },
+    ])
+    const d = await diff
+    expect(d.viewer).toEqual([{ op: 'rotate', on: true }, { op: 'hud', on: false }])
+    expect(d.added).toHaveLength(1)
+  })
+
+  it('keeps a viewer op that shares a batch with clear', async () => {
+    // clear resets added/removed because those parts no longer exist. A view op
+    // is not made moot by a clear, so it survives.
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const diff = a.nextDiff()
+    a.send([{ op: 'view', n: 1 }, { op: 'box', at: [0, 0, 0], size: [2, 2, 2], mat: 'oak' }, { op: 'clear' }])
+    const d = await diff
+    expect(d.cleared).toBe(true)
+    expect(d.added).toHaveLength(0)
+    expect(d.viewer).toEqual([{ op: 'view', n: 1 }])
+  })
+
+  it('leaves viewer empty on an ordinary batch', async () => {
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const diff = a.nextDiff()
+    a.send([{ op: 'box', at: [0, 0, 0], size: [2, 2, 2], mat: 'oak' }])
+    expect((await diff).viewer).toEqual([])
+  })
+
+  it('acks an out-of-range view as an error and relays nothing', async () => {
+    const srv = await startServer()
+    const a = await connect(srv.port())
+    const ackP = a.nextAck()
+    const diffP = a.nextDiff()
+    a.send([{ op: 'view', n: 99 }])
+    const ack = await ackP
+    expect(ack.errors.length).toBeGreaterThan(0)
+    expect((await diffP).viewer).toEqual([])
+  })
+
   it('rejects an unauthenticated connection when auth is required', async () => {
     const srv = await startServer({ authRequired: true, token: 'sekret' })
     await expect(connect(srv.port())).rejects.toThrow(/closed before welcome/)

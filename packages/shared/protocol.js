@@ -22,12 +22,18 @@
  * Every part op normalizes to { kind, center, size, material } in block space,
  * where center is the geometry center and size is the full extent. The renderer
  * turns that into an instance matrix; BLOCK_SIZE is applied once by the viewer.
+ *
+ * Ordering: viewer ops apply AFTER the world diff, regardless of their position
+ * in the batch. So [{op:'view',n:1}, box, clear] lands as clear -> box -> view.
+ * This is a real semantic, not an accident of implementation — framing a build
+ * you are about to erase is never what was meant.
  */
 
 import { WORLD } from './config.js'
 import { isMaterial } from './materials.js'
 import { blockLabel, BLOCK_SIZE } from './config.js'
 import { MATERIALS } from './materials.js'
+import { VIEW_COUNT } from './views.js'
 
 export const PART_OPS = new Set(['box', 'fill', 'sphere', 'ellipsoid', 'cylinder', 'tube'])
 
@@ -44,8 +50,21 @@ export const AXES = ['x', 'y', 'z']
  */
 export const CONTROL_OPS = new Set(['remove', 'clear', 'world_info', 'build_begin'])
 
+/**
+ * Viewer ops direct presentation. They touch no world state, so the server
+ * relays them and never stores them — a third category rather than more control
+ * ops, because "relay, don't store" is a different routing rule and both the
+ * server and the viewer's local path need one predicate for it.
+ *
+ * Five explicit ops rather than one grouped `view {n?, rotate?, ...}`: the Go
+ * client requires every declared field to be present, so an optional-field op
+ * is unrepresentable there.
+ */
+export const VIEWER_OPS = new Set(['view', 'reframe', 'rotate', 'grid', 'hud'])
+
 export const isPartOp = op => PART_OPS.has(op)
 export const isControlOp = op => CONTROL_OPS.has(op)
+export const isViewerOp = op => VIEWER_OPS.has(op)
 
 /** Machine-readable field spec, published to schema-driven clients via contract(). */
 export const OP_SCHEMA = [
@@ -59,6 +78,11 @@ export const OP_SCHEMA = [
   { op: 'clear', fields: {} },
   { op: 'world_info', fields: {} },
   { op: 'build_begin', fields: {} },
+  { op: 'view', fields: { n: 'int+' } },
+  { op: 'reframe', fields: {} },
+  { op: 'rotate', fields: { on: 'bool' } },
+  { op: 'grid', fields: { on: 'bool' } },
+  { op: 'hud', fields: { on: 'bool' } },
 ]
 
 // --- validation helpers -----------------------------------------------------
@@ -66,6 +90,7 @@ export const OP_SCHEMA = [
 const isInt = n => Number.isInteger(n)
 const isPosInt = n => Number.isInteger(n) && n > 0
 const isInt3 = v => Array.isArray(v) && v.length === 3 && v.every(isInt)
+const isBool = v => typeof v === 'boolean'
 
 const half = (a, b, c) => [a / 2, b / 2, c / 2]
 
@@ -141,7 +166,7 @@ export const validate = cmd => {
   const errors = []
   if (cmd == null || typeof cmd !== 'object') return { ok: false, errors: ['command must be an object'] }
   const { op } = cmd
-  if (typeof op !== 'string' || (!PART_OPS.has(op) && !CONTROL_OPS.has(op))) {
+  if (typeof op !== 'string' || (!PART_OPS.has(op) && !CONTROL_OPS.has(op) && !VIEWER_OPS.has(op))) {
     return { ok: false, errors: [`unknown op: ${JSON.stringify(op)}`] }
   }
 
@@ -176,9 +201,20 @@ export const validate = cmd => {
     case 'remove':
       if (!isInt(cmd.id) || cmd.id < 0) errors.push('id must be a non-negative integer')
       break
+    case 'view':
+      // Range-checked here so an out-of-range preset is a refusal, not a
+      // silent no-op — the viewer's own lookup would just return null.
+      if (!isPosInt(cmd.n) || cmd.n > VIEW_COUNT) errors.push(`n must be an integer 1..${VIEW_COUNT}`)
+      break
+    case 'rotate':
+    case 'grid':
+    case 'hud':
+      if (!isBool(cmd.on)) errors.push('on must be true or false')
+      break
     case 'clear':
     case 'world_info':
     case 'build_begin':
+    case 'reframe':
       break
   }
 

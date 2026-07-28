@@ -7,7 +7,11 @@ import {
   MATERIALS, MATERIAL_NAMES, MATERIAL_FAMILIES, isMaterial, materialColor, materialFamily,
 } from '@codeblox/shared/materials.js'
 import { FAMILY, isFamily } from '@codeblox/shared/families.js'
-import { validate, expand, contract, isPartOp } from '@codeblox/shared/protocol.js'
+import {
+  validate, expand, contract, isPartOp, isViewerOp,
+  PART_OPS, CONTROL_OPS, VIEWER_OPS,
+} from '@codeblox/shared/protocol.js'
+import { VIEWS, VIEW_COUNT } from '@codeblox/shared/views.js'
 
 describe('config', () => {
   it('uses a 2 cm block by default', () => {
@@ -203,6 +207,63 @@ describe('protocol.validate', () => {
   })
 })
 
+describe('views table', () => {
+  it('numbers the presets 1..VIEW_COUNT with no gaps', () => {
+    expect(VIEW_COUNT).toBe(6)
+    for (let n = 1; n <= VIEW_COUNT; n++) expect(VIEWS[n]).toBeTruthy()
+  })
+  it('gives every preset an azimuth, an elevation and a name', () => {
+    for (const [az, el, name] of Object.values(VIEWS)) {
+      expect(Number.isFinite(az)).toBe(true)
+      expect(Number.isFinite(el)).toBe(true)
+      expect(typeof name).toBe('string')
+    }
+  })
+})
+
+describe('protocol viewer ops', () => {
+  it('is a third category — neither part nor stored state', () => {
+    for (const op of VIEWER_OPS) {
+      expect(isViewerOp(op)).toBe(true)
+      expect(isPartOp(op)).toBe(false)
+      expect(expand({ op })).toEqual([])
+    }
+    expect(isViewerOp('box')).toBe(false)
+    expect(isViewerOp('clear')).toBe(false)
+  })
+
+  it('range-checks view n against the shared table', () => {
+    // The point of lifting VIEWS into shared: an out-of-range preset is refused
+    // here rather than returning ok and doing nothing in the viewer.
+    for (let n = 1; n <= VIEW_COUNT; n++) expect(validate({ op: 'view', n }).ok).toBe(true)
+    const over = validate({ op: 'view', n: VIEW_COUNT + 1 })
+    expect(over.ok).toBe(false)
+    expect(over.errors.join()).toMatch(/1\.\.6/)
+    expect(validate({ op: 'view', n: 0 }).ok).toBe(false)
+    expect(validate({ op: 'view', n: 1.5 }).ok).toBe(false)
+    expect(validate({ op: 'view' }).ok).toBe(false)
+  })
+
+  it('requires a real boolean on the flag ops', () => {
+    for (const op of ['rotate', 'grid', 'hud']) {
+      expect(validate({ op, on: true }).ok).toBe(true)
+      expect(validate({ op, on: false }).ok).toBe(true)
+      // 'on' as a string is exactly what a hand-written batch gets wrong.
+      expect(validate({ op, on: 'true' }).ok).toBe(false)
+      expect(validate({ op, on: 1 }).ok).toBe(false)
+      expect(validate({ op }).ok).toBe(false)
+    }
+  })
+
+  it('accepts reframe, which carries no fields', () => {
+    expect(validate({ op: 'reframe' }).ok).toBe(true)
+  })
+
+  it('still refuses an op in none of the three sets', () => {
+    expect(validate({ op: 'zoom' }).ok).toBe(false)
+  })
+})
+
 describe('protocol.expand', () => {
   it('normalizes a box to center + size', () => {
     const [p] = expand({ op: 'box', at: [0, 0, 0], size: [10, 20, 10], mat: 'oak' })
@@ -257,5 +318,22 @@ describe('protocol.contract', () => {
       op: 'build_begin',
       fields: {},
     })
+  })
+
+  it('publishes every viewer op with its field types', () => {
+    const ops = contract().ops
+    for (const op of VIEWER_OPS) expect(ops.find(o => o.op === op)).toBeTruthy()
+    expect(ops.find(o => o.op === 'view')).toEqual({ op: 'view', fields: { n: 'int+' } })
+    expect(ops.find(o => o.op === 'reframe')).toEqual({ op: 'reframe', fields: {} })
+    for (const op of ['rotate', 'grid', 'hud']) {
+      expect(ops.find(o => o.op === op)).toEqual({ op, fields: { on: 'bool' } })
+    }
+  })
+
+  it('publishes a schema row for every declared op, in all three sets', () => {
+    const declared = contract().ops.map(o => o.op)
+    for (const op of [...PART_OPS, ...CONTROL_OPS, ...VIEWER_OPS]) {
+      expect(declared).toContain(op)
+    }
   })
 })

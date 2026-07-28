@@ -1,12 +1,12 @@
 # Progress
 
 **Current version:** 0.8.0
-**Active phase:** none — R3 shipped as `v0.8.0`: P-13 (F-3) and P-14 (I-11), two independent
-housekeeping phases that stopped two things lying. `world.py` no longer offers a refresh the CLI
-never accepted, and the shipped skill's `.codex/`/`.agents/` mirrors now fail a test when they drift
-instead of going quietly stale. 488 tests: 95 vitest, 112 Go unit, 24 Go e2e, 257 pytest
-(codeblox-builder, +1 skipped) — plus 54 pytest for the `dev-phase` skill family, which is
-chore-track tooling and is counted separately.
+**Active phase:** R4 — agent-driven viewer control, five phases batched into one release. P-15
+(I-12) is done: the protocol has a vocabulary for directing presentation. P-16 (I-13) and P-17
+(I-14) are unblocked and independent of each other; P-19 (F-4, the HUD extent row) never depended
+on anything; P-18 (I-15) lands last so `SKILL.md` describes only behaviour that already exists.
+502 tests: 109 vitest, 112 Go unit, 24 Go e2e, 257 pytest (codeblox-builder, +1 skipped) — plus 54
+pytest for the `dev-phase` skill family, which is chore-track tooling and is counted separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -36,7 +36,7 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 12 | A build is a thing, to the skill and to the viewer (I-5, I-6) — retroactive, see `docs/PLAN.md` note 3 | done |
 | 13 | Stop world.py asking for a cache the CLI does not have | done |
 | 14 | Make the skill mirrors provable rather than remembered | done |
-| 15 | Viewer ops — a third op category, published and relayed | planned |
+| 15 | Viewer ops — a third op category, published and relayed | done |
 | 16 | The viewer applies agent direction, and an agent-set angle holds | planned |
 | 17 | codeblox view — presentation gets its own verb group | planned |
 | 18 | The skill learns to direct the camera | planned |
@@ -44,8 +44,11 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 
 ## Next action
 
-**No active plan.** R3 shipped as `v0.8.0` and `docs/PLAN.md` is back to its stub — the next plan
-starts with `dev-phase-start`.
+**P-16 or P-17 next, and they are independent of each other** — both were waiting only on P-15's
+ops. P-16 (I-13) wires the viewer to act on them; P-17 (I-14) gives the CLI a `view` verb group.
+P-19 (F-4, the HUD extent row) depends on nothing and can be taken at any point. P-18 (I-15) is last
+by design, so `SKILL.md` documents only behaviour that already ships. R4 is batched: one release
+when all five land.
 
 One thing R3 surfaced and deliberately did not act on: **`.agents/rules/` is orphaned.** Twelve
 tracked markdown files with no source anywhere in this repo — `.claude/` tracks only `settings.json`
@@ -71,6 +74,30 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> Phase 15 (done): Gave the protocol a vocabulary for directing presentation, and opened R4 (I-12).
+> Five viewer ops — `view`, `reframe`, `rotate`, `grid`, `hud` — in a third category beside
+> `PART_OPS` and `CONTROL_OPS`, relayed to every viewer and never stored. Five explicit ops rather
+> than one grouped `view {n?, rotate?, …}` because the Go client requires every declared field to be
+> present, which makes an optional-field op unrepresentable there; the same constraint is why
+> `ellipsoid` and `tube` became new ops in P-8 rather than new fields. The move that earns its keep
+> is the smallest one: `VIEWS` left `CameraDirector.js` for `packages/shared/views.js`, so
+> `protocol.js` can range-check `n` against `VIEW_COUNT`. While the table was module-scoped in the
+> viewer, `view 7` could only ever be a silent no-op — `viewFrom` returned `null` into a caller that
+> discarded it — and to a blind agent a silent no-op and a success are the same observation. Two
+> behaviours were decided rather than fallen into: a viewer op survives a `clear` in the same batch
+> (the `viewer` array is deliberately not reset in the `clear` arm the way `added`/`removed` are,
+> because a clear erases the world but does not make "look from view 1" moot), and viewer ops apply
+> *after* the world diff regardless of batch position, so `[{view:1}, box, clear]` lands as
+> `clear → box → view`. That rule now lives in the `protocol.js` header, where it is a semantic
+> rather than an accident of statement order. They ride the broadcast and not the ack, because
+> `broadcast()` already includes the sender and the CLI's typed `Ack` silently drops fields it was
+> not compiled for — it has been dropping `buildBegin` since P-12. Checked rather than assumed: the
+> Go client's `checkField` defers unrecognised field types to the server, so publishing `bool` in the
+> contract does not break the CLI before P-17 implements it. `applyLocal` was left alone — its
+> `isPartOp` guard means a viewer op validates and is then ignored offline, which is correct until
+> P-16. Nothing moves on screen yet; 14 new tests say only that the vocabulary exists and is refused
+> when wrong.
 
 > Phase 14 (done): Made the skill mirrors provable rather than remembered, and closed R3 (I-11).
 > `codeblox-builder` ships to three agent hosts from one authored source, and the `.codex/` and

@@ -1,21 +1,11 @@
 import { Vector3, MathUtils } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { BLOCK_SIZE, WORLD } from '@codeblox/shared/config.js'
+import { VIEWS } from '@codeblox/shared/views.js'
 
 const PADDING = 1.3
 const MIN_RADIUS_METRES = 1.0 // frame an empty/tiny world to something sensible
 const EASE_K = 6 // higher = snappier agent-follow
-
-// Canned review angles: [azimuth°, elevation°, name]. Together they cover
-// front / side / plan / back / massing — no blind side.
-const VIEWS = {
-  1: [45, 25, 'three-quarter'], // front hero
-  2: [0, 12, 'front-low'], // front silhouette
-  3: [90, 12, 'side-low'], // side silhouette
-  4: [0, 89, 'top-down'], // plan
-  5: [225, 25, 'rear three-quarter'], // the other side
-  6: [40, 58, "bird's-eye"], // high angle — massing + footprint
-}
 
 /**
  * Owns the camera. In AGENT mode an auto-framer eases the camera to fit the build

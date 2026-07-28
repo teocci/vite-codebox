@@ -1,4 +1,4 @@
-import { validate, expand, isPartOp } from '@codeblox/shared/protocol.js'
+import { validate, expand, isPartOp, isViewerOp } from '@codeblox/shared/protocol.js'
 
 /**
  * Apply a command batch to the authoritative store, producing the normalized diff
@@ -6,11 +6,12 @@ import { validate, expand, isPartOp } from '@codeblox/shared/protocol.js'
  * + expand), so the server is authoritative without a second protocol definition.
  *
  * Returns { added: [{id,...part}], removed: [ids], cleared, buildBegin,
- * errors: [{cmd,errors}] }.
+ * viewer: [cmds], errors: [{cmd,errors}] }.
  */
 export const applyBatch = (store, batch = []) => {
   const added = []
   const removed = []
+  const viewer = []
   const errors = []
   let cleared = false
   let buildBegin = false
@@ -39,6 +40,13 @@ export const applyBatch = (store, batch = []) => {
       buildBegin = true
       continue
     }
+    // Relayed, never stored. Deliberately NOT reset by the `clear` arm the way
+    // added/removed are: a clear erases the world, but it does not make "look
+    // from view 1" moot.
+    if (isViewerOp(cmd.op)) {
+      viewer.push(cmd)
+      continue
+    }
     if (isPartOp(cmd.op)) {
       for (const part of expand(cmd)) {
         const id = store.add(part)
@@ -47,5 +55,5 @@ export const applyBatch = (store, batch = []) => {
     }
   }
 
-  return { added, removed, cleared, buildBegin, errors }
+  return { added, removed, cleared, buildBegin, viewer, errors }
 }

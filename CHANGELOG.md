@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- I-12: Five viewer ops — `view`, `reframe`, `rotate`, `grid` and `hud` — in a third op category the
+  server relays to every viewer and never stores. Five explicit ops rather than one grouped op with
+  optional fields, because the Go client requires every declared field to be present. The `VIEWS`
+  table moved to `packages/shared/views.js` so `protocol.js` can range-check `n` against
+  `VIEW_COUNT`: while the table was module-scoped inside `CameraDirector.js`, `view 7` could only be
+  a silent no-op, and to a blind agent a silent no-op is indistinguishable from success. Two
+  behaviours are deliberate rather than incidental — a viewer op survives a `clear` in the same batch
+  (a clear erases the world, but it does not make "look from view 1" moot), and viewer ops apply
+  *after* the world diff regardless of batch position, so `[{view:1}, box, clear]` lands as
+  `clear → box → view`. They ride the broadcast, not the ack, because the broadcast already includes
+  the sender and the CLI's typed `Ack` drops fields it wasn't compiled for. Nothing moves on screen
+  yet; that is P-16.
+
 ## [0.8.0] - 2026-07-27
 
 the mirrors and the docs stop lying — a drift test for the shipped skill, and a refresh flag that never worked, removed
