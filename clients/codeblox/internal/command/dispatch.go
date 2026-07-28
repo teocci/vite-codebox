@@ -37,6 +37,15 @@ building:
   codeblox remove      --id N
   codeblox clear
 
+presentation:
+  codeblox view N                            snap to canned review angle N
+  codeblox view reframe                      drop any focus and refit the world
+  codeblox view rotate|grid|hud on|off       set a viewer toggle, idempotently
+
+  Presentation is relayed to every connected viewer and stored nowhere. The
+  server range-checks the preset number, so codeblox info is what tells you how
+  many there are.
+
   codeblox version
 
 Batches are validated against the server's published schema and palette before
@@ -93,6 +102,8 @@ func Dispatch(ctx context.Context, d Deps, args []string) error {
 		return dispatchAuth(ctx, d, args[1:])
 	case "info", "materials", "exec", "box", "sphere", "cylinder", "remove", "clear":
 		return dispatchBuild(ctx, d, args[0], args[1:])
+	case "view":
+		return dispatchView(ctx, d, args[1:])
 	case "version":
 		fmt.Fprintf(d.Stdout, "codeblox %s\n", Version)
 		return nil

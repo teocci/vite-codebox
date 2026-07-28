@@ -22,7 +22,9 @@ const sample = `{
     {"op":"box","fields":{"at":"int3","size":"int3+","mat":"material"}},
     {"op":"sphere","fields":{"at":"int3","r":"int+","mat":"material"}},
     {"op":"remove","fields":{"id":"id"}},
-    {"op":"clear","fields":{}}
+    {"op":"clear","fields":{}},
+    {"op":"rotate","fields":{"on":"bool"}},
+    {"op":"tube","fields":{"at":"int3","r":"int+","h":"int+","axis":"axis","mat":"material"}}
   ]
 }`
 
@@ -58,8 +60,8 @@ func TestParsesConfigPaletteAndOps(t *testing.T) {
 	if c.Palette["glass"].Family != "glass" {
 		t.Fatalf("glass family = %q, want %q", c.Palette["glass"].Family, "glass")
 	}
-	if len(c.Ops) != 4 {
-		t.Fatalf("ops has %d entries, want 4", len(c.Ops))
+	if len(c.Ops) != 6 {
+		t.Fatalf("ops has %d entries, want 6", len(c.Ops))
 	}
 }
 
@@ -159,6 +161,49 @@ func TestValidateAcceptsIdZeroButRejectsNegative(t *testing.T) {
 	}
 	if errs := c.ValidateCommand(cmd(t, `{"op":"remove","id":-1}`)); len(errs) == 0 {
 		t.Fatal("ValidateCommand accepted a negative id")
+	}
+}
+
+func TestValidateAcceptsRealBooleans(t *testing.T) {
+	c := parse(t)
+	for _, body := range []string{`{"op":"rotate","on":true}`, `{"op":"rotate","on":false}`} {
+		if errs := c.ValidateCommand(cmd(t, body)); len(errs) != 0 {
+			t.Fatalf("ValidateCommand rejected %s: %v", body, errs)
+		}
+	}
+}
+
+func TestValidateRejectsANonBooleanForABoolField(t *testing.T) {
+	// The failure this prevents is not a typo report, it is a silent partial
+	// apply: the server records a rejected command and carries on, so a batch
+	// ending in {"op":"rotate","on":"yes"} would land every part before it and
+	// simply not rotate, with the reason buried in an ack this client drops.
+	c := parse(t)
+	for _, body := range []string{
+		`{"op":"rotate","on":"yes"}`,
+		`{"op":"rotate","on":"true"}`,
+		`{"op":"rotate","on":1}`,
+		`{"op":"rotate","on":null}`,
+	} {
+		errs := c.ValidateCommand(cmd(t, body))
+		if len(errs) == 0 {
+			t.Fatalf("ValidateCommand accepted %s", body)
+		}
+		if !strings.Contains(strings.Join(errs, " "), "on") {
+			t.Errorf("errors %v for %s do not name the field", errs, body)
+		}
+	}
+}
+
+func TestValidateStillDefersTheAxisDomainToTheServer(t *testing.T) {
+	// bool is implemented and axis is not, and the line between them is the
+	// value domain: bool is a structural JSON check, while x|y|z is server data
+	// this package refuses to compile in. Implementing bool must not drag axis
+	// across that line.
+	c := parse(t)
+	body := `{"op":"tube","at":[0,0,0],"r":1,"h":2,"axis":"w","mat":"granite"}`
+	if errs := c.ValidateCommand(cmd(t, body)); len(errs) != 0 {
+		t.Fatalf("ValidateCommand judged an axis value client-side: %v", errs)
 	}
 }
 

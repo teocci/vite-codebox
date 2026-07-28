@@ -1,13 +1,14 @@
 # Progress
 
 **Current version:** 0.8.0
-**Active phase:** R4 — agent-driven viewer control, five phases batched into one release. Three of
+**Active phase:** R4 — agent-driven viewer control, five phases batched into one release. Four of
 five done: the protocol has a vocabulary for directing presentation (P-15), the viewer acts on it and
-an agent-set angle holds (P-16), and the HUD no longer widens past its panel at 1:1 (P-19). P-17
-(I-14) is unblocked; P-18 (I-15) lands last, so `SKILL.md` describes only behaviour that already
-exists, and it is the phase that closes the release. 523 tests: 130 vitest, 112 Go unit, 24 Go e2e,
-257 pytest (codeblox-builder, +1 skipped) — plus 54 pytest for the `dev-phase` skill family, which is
-chore-track tooling and is counted separately.
+an agent-set angle holds (P-16), the CLI has a `view` verb group and a real `bool` type (P-17), and
+the HUD no longer widens past its panel at 1:1 (P-19). Only P-18 (I-15) remains — the skill's turn,
+last by design so `SKILL.md` describes only behaviour that already ships, and the phase that closes
+the release. 538 tests: 130 vitest, 127 Go unit, 24 Go e2e, 257 pytest (codeblox-builder, +1 skipped)
+— plus 54 pytest for the `dev-phase` skill family, which is chore-track tooling and is counted
+separately.
 
 > Counting note: the v0.4.0 entry records "136 tests: 44 vitest + 92 Go", understated even then. The
 > v0.5.0 entry's "297 tests: … 27 Go e2e" was also wrong in one term — the e2e suite has 24 test
@@ -39,17 +40,23 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 14 | Make the skill mirrors provable rather than remembered | done |
 | 15 | Viewer ops — a third op category, published and relayed | done |
 | 16 | The viewer applies agent direction, and an agent-set angle holds | done |
-| 17 | codeblox view — presentation gets its own verb group | planned |
+| 17 | codeblox view — presentation gets its own verb group | done |
 | 18 | The skill learns to direct the camera | planned |
 | 19 | Split the HUD extent row so the panel stops growing | done |
 
 ## Next action
 
-**P-17 (I-14), then P-18 (I-15) to close R4.** P-17 gives the CLI a `view` verb group and implements
-`bool` in the Go client — the contract already publishes the type, and `checkField` currently defers
-it to the server, so a bad flag reaches the wire instead of being refused locally. P-18 then teaches
-`world.py` and `SKILL.md` the five ops, last by design so the skill documents only behaviour that
-already ships. R4 is batched: one release when all five land, cut on P-18.
+**P-18 (I-15) closes R4.** It teaches `world.py`'s no-geometry frozenset and `SKILL.md` the five ops,
+last by design so the skill documents only behaviour that already ships. The drift risk it carries is
+known and accepted: that frozenset is a hand-maintained mirror of the JS sets, and F-2's design is
+what makes it safe — an op *missing* from it makes `aabb()` raise `AnchorError` rather than silently
+returning `None` and bypassing the bounds and scale gates. A test must pin that raise. It will also
+need `npm run sync:skills`, or the P-14 mirror test goes red.
+
+**At release time, two version sites must move together.** `cut_release.py` bumps `package.json`; the
+Go CLI's `command.Version` constant is separate and manual. It drifted once already (the CLI still
+said `0.3.0` at v0.4.0), and it matters because `resolve_codeblox.py` runs `codeblox version` as its
+health check, so a stale constant misreports which binary is in use.
 
 One thing R3 surfaced and deliberately did not act on: **`.agents/rules/` is orphaned.** Twelve
 tracked markdown files with no source anywhere in this repo — `.claude/` tracks only `settings.json`
@@ -75,6 +82,31 @@ than silently, but it is blocked. This is the gate on running the server anywher
 Operator note: `install_codeblox.py` has only ever been run with `--dry-run`. Writing to the User
 PATH is the one irreversible-ish step in the skill and is left to be triggered deliberately with
 `npm run install:cli`; everything works today through the resolver's repo-checkout rung.
+
+> Phase 17 (done): Gave presentation its own verb group and the contract a real `bool` (I-14).
+> `codeblox view N | reframe | rotate|grid|hud on|off` lives in a new `dispatch_view.go` following
+> `dispatchAuth`, reusing `flagSurface`, the common flags, `--dry-run`, `--json` and the session path.
+> The group exists because presentation is not building: `exec` is the batch runner, parsing an array,
+> object or NDJSON from stdin and validating the whole batch before sending, and routing camera and
+> HUD direction through it is a category error — the CLI already draws this line, since `clear` is an
+> op *and* a verb. Two things surfaced only in the writing. `flagSurface.parse` rejects positionals
+> outright, so `view` cannot hand it the whole argv; `viewCommand` consumes the leading tokens and
+> returns the remainder, which is the same split `dispatchAuth` already does. And `usage` is a
+> raw-string literal, so the backticks the rest of the docs put around `codeblox info` terminated the
+> string and broke the build — they are gone from that block. The `bool` type is the part that changes
+> behaviour. It was implemented rather than deferred the way `axis` is, and the line between them is
+> the value domain: `axis` means x|y|z, which is server data this package refuses to compile in, while
+> `bool` is a structural JSON check fully described by its type name, in the same category as `int+`
+> and `id`. Six lines are worth it because of *how the server fails* — `applyBatch` records a rejected
+> command and continues, so a batch of thirty parts ending in `{"op":"rotate","on":"yes"}` landed all
+> thirty and silently did not rotate, with the reason buried in an ack the CLI drops. Demonstrated on
+> that exact failure rather than asserted in the abstract: the batch now exits 5 with the box in front
+> of it never landing. `view.n` deliberately stays `int+` — a `view` type would compile in "there are
+> six presets", precisely the server knowledge this package exists not to hold — and a test pins that
+> `view 7` produces no client-side error, so nobody later "fixes" it by hardcoding the count. Verified
+> end-to-end with the built binary against the running server: `view 1` and `view rotate off` succeed,
+> `view 99` exits **6** because the server refuses it, `view grid yes` and `view zoom` exit 2 with
+> nothing sent, and `info` now lists all five ops with their field types.
 
 > Phase 16 (done): Made the five viewer ops do something, and gave an agent-set camera angle a way to
 > survive the build (I-13). Presentation routes around the block engine: `WsClient` gained `onViewer`

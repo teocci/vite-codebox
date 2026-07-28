@@ -36,6 +36,19 @@ All notable changes to this project are documented here. The format follows
   behaviour per action instead of two that drift, and the preset keys derive from `VIEW_COUNT`
   instead of six hardcoded cases.
 
+- I-14: `codeblox view` — presentation gets its own verb group rather than riding in an `exec` batch.
+  `codeblox view N`, `view reframe`, and `view rotate|grid|hud on|off`, mirroring `auth`, with
+  `--dry-run`, `--json` and the common flags. `exec` is the batch runner, and routing camera and HUD
+  direction through it is a category error; the CLI already draws this line, since `clear` is an op
+  *and* a verb. The contract also gained a real `bool` field type, implemented rather than deferred
+  the way `axis` is: `axis` defers because `x|y|z` is server data the client refuses to compile in,
+  while `bool` is a structural JSON check fully described by its type name. That distinction is worth
+  the six lines because of how the server fails — it records a rejected command and continues, so a
+  batch of thirty parts ending in `{"op":"rotate","on":"yes"}` used to land all thirty and silently
+  not rotate, with the reason buried in an ack the CLI drops. It now exits 5 with nothing sent.
+  `view.n` stays `int+`, so an out-of-range preset is forwarded and refused by the server — the only
+  party that knows how many presets exist.
+
 ### Fixed
 
 - F-4: The HUD's `extent` row no longer pushes the panel across the viewport at 1:1 scale. It carried

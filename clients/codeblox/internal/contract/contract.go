@@ -30,6 +30,7 @@ const (
 	typeIntPos   = "int+"
 	typeID       = "id"
 	typeMaterial = "material"
+	typeBool     = "bool"
 
 	vectorLen = 3
 )
@@ -178,6 +179,20 @@ func (c Contract) checkField(field, kind string, value any) error {
 		n, ok := asInt(value)
 		if !ok || n < 0 {
 			return fmt.Errorf("%s must be a non-negative integer, got %v", field, value)
+		}
+	case typeBool:
+		// Implemented rather than deferred, unlike `axis`. The distinction is the
+		// value domain: `axis` means x|y|z, which is server data this package
+		// refuses to compile in, while `bool` is a structural JSON check fully
+		// described by its type name — the same category as int+ and id.
+		//
+		// It matters because of how the server fails, not for tidiness. applyBatch
+		// records a rejected command and continues, so a batch of thirty parts
+		// ending in {"op":"rotate","on":"yes"} lands all thirty and silently does
+		// not rotate, with the reason buried in an ack this client drops. Checking
+		// here kills the batch before anything is sent.
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("%s must be true or false, got %v", field, value)
 		}
 	case typeMaterial:
 		name, ok := value.(string)
