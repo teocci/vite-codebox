@@ -40,6 +40,7 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 16 | The viewer applies agent direction, and an agent-set angle holds | planned |
 | 17 | codeblox view — presentation gets its own verb group | planned |
 | 18 | The skill learns to direct the camera | planned |
+| 19 | Split the HUD extent row so the panel stops growing | planned |
 
 ## Next action
 
