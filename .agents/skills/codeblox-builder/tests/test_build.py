@@ -231,6 +231,22 @@ def test_a_plan_with_no_geometry_is_not_gated_on_scale():
     build.check_scale({'mm': [2000, 1000, 3000]}, marker, BLOCK, BOUNDS)
 
 
+def test_a_viewer_op_rides_a_stage_without_moving_the_measured_extent():
+    # The declarative path: a viewer op is a raw command like any other, so it
+    # needs no machinery here — but it must measure as nothing, or a plan that
+    # frames itself would fail the scale gate it was already passing.
+    with_view = build.expand([stage('mass', MASS, {'op': 'view', 'n': 1})])
+    assert build.plan_extent(with_view) == build.plan_extent(build.expand([stage('mass', MASS)]))
+    assert {'op': 'view', 'n': 1} in with_view[0]
+
+
+def test_a_stage_of_only_viewer_ops_is_a_stage():
+    # A review beat sent on its own. check_stage wants "at least one part", and
+    # a raw op satisfies it — otherwise framing a finished build would mean
+    # padding the stage with geometry it does not want.
+    build.check_stage(stage('review', {'op': 'view', 'n': 4}, {'op': 'rotate', 'on': True}), 0)
+
+
 def test_the_scale_gate_runs_before_anything_is_sent():
     # The headline guarantee, again: `remove` takes an id, so there is no
     # partial undo of a wrongly-sized build.
