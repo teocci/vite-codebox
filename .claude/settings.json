@@ -14,7 +14,8 @@
       "Read(//c/Users/teocci/.codeblox/**)",
       "Bash(python -c ' *)",
       "Bash(node -e ' *)",
-      "Bash(echo \"exit=$?\")"
+      "Bash(echo \"exit=$?\")",
+      "Bash(git check-ignore *)"
     ]
   }
 }
