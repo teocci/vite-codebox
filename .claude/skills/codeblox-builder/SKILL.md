@@ -23,6 +23,15 @@ Never write a path to the `codeblox` binary anywhere. `resolve_codeblox.py`
 finds it — an explicit `--bin`, then `$CODEBLOX_BIN`, then `$PATH`, then a repo
 checkout — and every other script calls it for you.
 
+That includes the bare `codeblox <verb>` invocations quoted further down: they assume the binary is on `$PATH`, which is not something to rely on. `cli.py` is the passthrough for a one-shot verb — it resolves the binary, forwards its whole argv verbatim, and returns the CLI's own exit code and streams unchanged. It has no flags of its own, so a flag in the argument list belongs to the CLI.
+
+```
+.venv/Scripts/python .claude/skills/codeblox-builder/scripts/cli.py view 4
+.venv/Scripts/python .claude/skills/codeblox-builder/scripts/cli.py clear
+```
+
+The `/codeblox:clear`, `/codeblox:view` and `/codeblox:doctor` slash commands are thin wrappers over this and `doctor.py`. They live in the repo's `.claude/commands/`, not in the skill, and are not mirrored to the other agent hosts.
+
 ## The workflow
 
 ```

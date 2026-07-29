@@ -1,14 +1,20 @@
 # Progress
 
-**Current version:** 0.9.0
-**Active phase:** none — R4 shipped as v0.9.0 and the plan is drained. Agent-driven viewer control
-landed end to end across five phases: the protocol has a vocabulary for directing presentation
-(P-15), the viewer acts on it and an agent-set angle holds (P-16), the CLI has a `view` verb group
-and a real `bool` type (P-17), the skill can put a viewer op in a plan stage (P-18), and the HUD no
-longer widens past its panel at 1:1 (P-19). 542 tests: 126 vitest, 126 Go unit, 23 Go e2e, 267
-pytest (codeblox-builder) — plus 58 chore-track pytest counted separately (54 `dev-phase`, 4
+**Current version:** 0.10.0
+**Active phase:** none — R5 shipped as v0.10.0 and the plan is drained. One phase: the three CLI
+operations that recur through a build loop — clear, aim, triage — are now `/codeblox:*` slash
+commands over a flagless `cli.py` passthrough (P-20). 552 tests: 126 vitest, 126 Go unit, 23 Go e2e,
+277 pytest (codeblox-builder) — plus 58 chore-track pytest counted separately (54 `dev-phase`, 4
 `scripts/py`). Two tests skip rather than fail and are excluded from that total: one Go credential
 test that asserts POSIX file permissions, and one pytest.
+
+Only the pytest term moved (267 → 277); P-20 touched no Go and no JS. It is also the first release
+whose entire content sits under `.claude/`, which §6b of the base conventions reads as chore-track.
+It was cut as a release anyway, on the v0.8.0 precedent — that release's only functional content was
+`codeblox-builder` work too, and the one product-source line it touched was the version constant
+itself. The rule and the practice disagree; `codeblox-builder` is a deliverable here, since it
+mirrors to `.codex/` and `.agents/` for other agent hosts to read straight from a checkout. §6b wants
+amending to say so — chore-track work, not tracked as a phase.
 
 The vitest count dropped 130 → 126 without losing coverage: `tests/skill-mirrors.test.js` was
 deleted because skill mirroring left the product surface entirely. `vite.config.js` globs
@@ -57,6 +63,7 @@ Detail files: `docs/phases/` · `docs/improvements/` · `docs/fixes/`. Active pl
 | 17 | codeblox view — presentation gets its own verb group | done |
 | 18 | The skill learns to direct the camera | done |
 | 19 | Split the HUD extent row so the panel stops growing | done |
+| 20 | Fast slash commands for the codeblox CLI | done |
 
 ## Next action
 
@@ -75,7 +82,7 @@ skill.
 **At release time, two version sites must move together.** `cut_release.py` bumps `package.json`; the
 Go CLI's `command.Version` constant is separate and manual. It drifted once already (the CLI still
 said `0.3.0` at v0.4.0), and it matters because `resolve_codeblox.py` runs `codeblox version` as its
-health check, so a stale constant misreports which binary is in use. Bumped by hand to `0.9.0` in
+health check, so a stale constant misreports which binary is in use. Bumped by hand to `0.10.0` in
 this release.
 
 One thing R3 surfaced and deliberately did not act on: **`.agents/rules/` is orphaned.** Twelve
@@ -105,6 +112,31 @@ PATH is the one irreversible-ish step in the skill and is left to be triggered d
 through the resolver's repo-checkout rung. (That invocation was written as `npm run install:cli` in
 three releases' worth of docs, including the shipped SKILL.md and the resolver's own not-found
 error. No such npm script ever existed — a test now asserts the path the error names is real.)
+
+> Phase 20 (done): Put the three recurring CLI operations behind slash commands — `/codeblox:clear`,
+> `/codeblox:view`, `/codeblox:doctor` (I-16). The scope is the decision, and it is mostly a list of
+> refusals: no per-shape commands, because a single `box` invocation pays a full handshake and
+> re-downloads the whole world snapshot, so one shape per process is exactly the path `build.py`
+> batches to avoid and a command would make that habit convenient; no `/build`, because a second
+> entry point beside the skill is how two things drift; no `/info`, `/remove` or `/materials`,
+> because nobody acts on 5 KB of contract JSON, nobody knows a part id by hand, and the skill already
+> fetches materials while building. What remains is what recurs and is not already one keystroke.
+> The implementation was shaped more by the permission model than by the feature: `settings.json`
+> already allowlists `.venv/Scripts/python .claude/skills/*`, so routing through a skill script costs
+> no new permission entry where a hardcoded binary path would need one — and that is also why the
+> interpreter path is written out literally rather than branched on at runtime, since a `[ -x … ] &&`
+> prefix falls outside the allowlist pattern and would restore a prompt on every call, which is the
+> single thing these commands exist to remove. `cli.py` ended up flagless against the plan, which
+> said it would take `--bin`: `$CODEBLOX_BIN` already covers that, and a wrapper parsing any flag of
+> its own must then decide which flags belong to the CLI — the I-1 bug, one layer up. Validation
+> stayed with the CLI for the same reason; `view bogus` returns the CLI's own message and exit 2 with
+> no Python wrapped around it. The server-down path was reproduced rather than assumed —
+> `npm run dev:stop`, `doctor.py` exit 4, `npm start`, three `[ok  ]` rows — because that is the
+> failure that prompted the phase. Writing the one-paragraph SKILL.md note found the more useful
+> defect: the file forbids writing a path to the binary and then quotes `codeblox view 4` bare, which
+> assumes a `$PATH` entry that does not exist here, so those examples had been unrunnable as written.
+> Release-track by the v0.8.0 precedent, not by §6b, which reads `.claude/**` as chore — the rule and
+> the practice disagree and the rule is the one that is wrong for the shipped skill.
 
 > Phase 18 (done): Taught the skill to direct the camera, and closed R4 (I-15). `world.py` gained
 > `VIEWER_OPS` beside `CONTROL_OPS` with `NO_GEOMETRY_OPS` as their union, which is what `aabb()`

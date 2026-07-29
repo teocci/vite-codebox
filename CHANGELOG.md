@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-29
+
+three CLI operations become one keystroke — slash commands over a flagless passthrough
+
+### Added
+
+- I-16: `/codeblox:clear`, `/codeblox:view` and `/codeblox:doctor` — slash commands that run their
+  CLI call while the prompt expands, so the three operations that recur through every build loop
+  cost no deliberation. What is *not* there is the design: no per-shape commands, because every
+  invocation pays a fresh handshake and re-downloads the whole world snapshot, so one shape per
+  process is the slow path `build.py` exists to avoid and a command would make the wrong habit
+  convenient; no `/build`, because a second entry point beside `codeblox-builder` is how the two
+  drift. Backing them is `cli.py`, a flagless passthrough that resolves the binary and forwards its
+  whole argv verbatim. Flagless is the point rather than an omission — `$CODEBLOX_BIN` already
+  covers the one flag it might have taken, and a wrapper that parses *any* flag must then decide
+  which flags are the CLI's, which is the bug I-1 fixed one layer down. Validation stays with the
+  CLI too: `view bogus` comes back with the CLI's own message and exit 2, not a Python traceback.
+  Routing through a skill script rather than a binary path is what makes the commands free of
+  permission prompts, and is why the venv interpreter is written out literally instead of chosen at
+  runtime. Writing the SKILL.md note also caught a standing inconsistency: the file forbids writing
+  a path to the binary, then quotes `codeblox view 4` bare — which assumes a `$PATH` entry that does
+  not exist on this machine.
+
 ## [0.9.0] - 2026-07-28
 
 agent-directed presentation: viewer ops from protocol to CLI to skill, and an angle that holds

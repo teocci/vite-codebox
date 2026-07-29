@@ -20,3 +20,4 @@ carries no done-marker; finalized appends `✅ Done in vX.Y.Z.` Detail files: `d
 | [I-13](improvements/I-13.md) | WsClient dispatches viewer ops to the Viewer via onViewer; setters replace toggles; viewFrom gains hold so the auto-framer keeps following. | ✅ Done in v0.9.0. |
 | [I-14](improvements/I-14.md) | Add dispatchView mirroring dispatchAuth, plus a typeBool case in checkField so a bad flag is refused before anything is sent. | ✅ Done in v0.9.0. |
 | [I-15](improvements/I-15.md) | Add the five names to world.py's no-geometry allowlist and document both the imperative and declarative paths, then re-sync the mirrors. | ✅ Done in v0.9.0. |
+| [I-16](improvements/I-16.md) | Three /codeblox: commands backed by a new cli.py passthrough, so clear, view and doctor cost no deliberation. | ✅ Done in v0.10.0. |

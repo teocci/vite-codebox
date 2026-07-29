@@ -15,7 +15,7 @@ import (
 //
 // This is a second version site: the project's source of truth is package.json,
 // and a release must bump both. docs/conventions/tracking.md records that.
-const Version = "0.9.0"
+const Version = "0.10.0"
 
 const usage = `codeblox — command a codeblox build server
 
