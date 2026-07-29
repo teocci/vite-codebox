@@ -1,3 +1,9 @@
+---
+version: 0.9.0
+updated: 2026-07-29
+verified_against: 1b3a885
+---
+
 # The bug that only an agent could hit
 
 For two releases, this command reported success and did nothing:
@@ -119,23 +125,33 @@ supposed to do this. Human tolerance for prose let us not.
 
 ### 3. The tool publishes its own capabilities
 
-The client compiles in no list of commands and no list of materials. Both arrive
-from the server at runtime, as a published contract:
+The client validates against no built-in list of ops and no built-in list of
+materials. Both arrive from the server at runtime, as a published contract:
 
 ```console
 $ world.py
-block 2 cm (0.02 m)   world 32 m half-extent
+block 2 cm (0.02 m) = 50 blocks per metre   world 32 m half-extent
 bounds  x -1600..1600   y 0..3200   z -1600..1600  (blocks)
-ops     box, clear, cylinder, fill, remove, sphere, world_info
+ops     box, build_begin, clear, cylinder, ellipsoid, fill, grid, hud, reframe, remove, rotate, sphere, tube, view, world_info
 materials 100 in 4 families:
-  emissive    9  arcane, ember, flame, lantern  …
-  glass       8  crystal, glass, glass_amber, moonstone  …
-  metal      13  brass, bronze, copper, gold, iron  …
-  opaque     70  amethyst, basalt, brick, cedar  …
+  emissive    9  arcane, arcane_pale, ember, flame, flame_core, flame_deep, flame_hot, lantern  …
+  glass       8  crystal, glass, glass_amber, glass_azure, glass_emerald, glass_rose, glass_violet, moonstone
+  metal      13  brass, bronze, copper, copper_verdigris, gold, gold_deep, gold_pale, iron  …
+  opaque     70  amethyst, bamboo, basalt, belly, belly_pale, brick, brick_pale, cedar  …
 ```
 
 Add a material to the server and every client can use it immediately. No release,
-no version negotiation, no table to update in three places.
+no version negotiation, no table to update in three places. That op list is the
+receipt: it has grown from seven to fifteen since this was written — `ellipsoid`
+and `tube`, then `build_begin`, then five viewer ops — and the schema-driven
+paths needed no change to accept them.
+
+The honest limit is that "every client can use it" means *validate and send it*.
+The CLI still compiles in its own list of convenience verbs (`box`, `sphere`,
+`cylinder`, …), and that list has visibly lagged — there is no ergonomic verb for
+`fill`, `ellipsoid` or `tube`, so those go through raw `exec` batches. A new
+material needs no release. A new op needs none either, unless you want to type it
+comfortably.
 
 This matters more with a model than with a person. A person reads the docs once
 and remembers. A model rebuilds its understanding on every invocation — so the
@@ -143,9 +159,9 @@ cheapest correct thing is to hand it the current truth each time, rather than
 hope the documentation and the server have not drifted apart.
 
 The corollary is sharper than it sounds: **documentation that can drift from the
-system is a liability, and the fix is to stop writing it.** The 100 material
-names appear nowhere in the skill's instructions. They cannot go stale, because
-they are not written down.
+system is a liability, and the fix is to stop writing it.** There is no palette
+table in the skill's instructions — a handful of names appear in worked examples,
+but the hundred are never enumerated. What is not written down cannot go stale.
 
 ### 4. Push determinism down; leave judgment up
 
@@ -163,11 +179,11 @@ coordinates:
 ```console
 $ shapes.py bridge --span 40 --width 6 --deck-height 8 \
             --mat oak --pier-mat granite --rail-mat oak_dark
-{"op":"box","at":[0,8,0],"size":[40,1,6],"mat":"oak"}
-{"op":"box","at":[12,0,1],"size":[3,8,4],"mat":"granite"}
-{"op":"box","at":[25,0,1],"size":[3,8,4],"mat":"granite"}
-{"op":"box","at":[0,9,0],"size":[40,1,1],"mat":"oak_dark"}
-{"op":"box","at":[0,9,5],"size":[40,1,1],"mat":"oak_dark"}
+{"op": "box", "at": [0, 8, 0], "size": [40, 1, 6], "mat": "oak"}
+{"op": "box", "at": [12, 0, 1], "size": [3, 8, 4], "mat": "granite"}
+{"op": "box", "at": [25, 0, 1], "size": [3, 8, 4], "mat": "granite"}
+{"op": "box", "at": [0, 9, 0], "size": [40, 1, 1], "mat": "oak_dark"}
+{"op": "box", "at": [0, 9, 5], "size": [40, 1, 1], "mat": "oak_dark"}
 ```
 
 Pier spacing, deck offsets, rail placement — arithmetic, and arithmetic across
@@ -180,10 +196,88 @@ probabilistic failure does putting it here remove?** If the answer is "none," it
 stays prose. That test kept the script count honest — and it is the reason the
 instructions are short. Everything a script could own, a script owns.
 
-Nine words in that skill's guidance carry more weight than any of the mechanics:
-*prefer few large parts over many small ones.* One 40×1×6 deck is one object in
-the engine; forty 1×1×6 blocks are forty. They look identical and one costs forty
-times as much. That is taste, and taste is what the model is for.
+Applied consistently, it grows a small toolkit instead of a large document: nine
+shape generators, a millimetre-to-block converter, a preflight check, and a
+builder that lands a plan in stages. Each exists because its arithmetic is a
+place a model reliably slips.
+
+The strongest example arrived later than the rest, and it is the one that best
+shows what determinism is actually buying. A plan declares its subject's real
+size, in millimetres:
+
+```json
+"subject": { "mm": [6000, 3500, 6000] }
+```
+
+That is not documentation. The builder measures the plan's own geometry against
+it and refuses to send anything when the two disagree. The reason is that **there
+is no partial undo** — `remove` takes an id, not a region — so a build discovered
+to be four times too small after it has landed can only be cleared and started
+over. And a model is perfectly capable of designing a coherent car and then
+placing it at one-fortieth scale. Every individual number stays plausible.
+Nothing looks wrong until it is standing next to something else.
+
+The rescaler that repairs such a plan is more interesting for what it refuses. It
+will scale a build about its grounded centre to hit the declared size — but only
+when all three axes are wrong by the *same* factor. When they are wrong by
+different factors, that is a proportion error, and one factor cannot repair three
+ratios. Scaling anyway would produce a correctly-sized wrong shape, which is
+worse than what it started with, because it then passes the gate. A script that
+declines to guess is doing the same job as an exit code that declines to lie.
+
+What is left for the model, after all of that, is one line of guidance that
+carries more weight than any of the mechanics: **spend parts on what is visible,
+not on a part budget.**
+
+That line replaced an earlier one that was wrong, which is worth admitting
+because it was wrong in an instructive way. The old guidance was *prefer few
+large parts over many small ones*, reasoned from the intuition that forty blocks
+must cost forty times what one block costs. They do not. The renderer keeps one
+instanced mesh per geometry kind × render family — five kinds, four families — so
+**the whole world is at most twenty draw calls no matter how many parts are in
+it**, and forty boxes of forty different opaque materials are one draw call, not
+forty. There is no protocol ceiling either. The advice was plausible, confidently
+stated, and sat in the instructions being followed for two releases.
+
+So the judgment is not "how do I stay cheap." It is "where does detail stop being
+visible" — and detail finer than a block cannot render at all. The current
+guidance puts numbers on it: a vehicle or a creature reads well at 50–300 parts,
+a building at 100–500, a landmark at 300–1000. Past that you are usually adding
+detail smaller than the smallest thing the engine can draw.
+
+Nothing here is ever rotated; every part is axis-aligned. So a raked windshield is
+not a tilted box, it is a staircase of thin slabs — which is how one car's
+greenhouse came to be 178 of its 305 parts. Whether that is worth it is exactly
+the question a script cannot answer. That is taste, and taste is what the model
+is for.
+
+---
+
+## The same bug, two releases later
+
+The four sections above are written as though they were lessons learned. Then
+`view` shipped.
+
+Five viewer ops were added so an agent could direct the camera — snap to a review
+angle, drop the grid, stop the turntable. The angle presets lived in a table
+inside the viewer's own camera module, which is where they had always lived and
+where nothing else had ever needed them. So an out-of-range preset — `view 7`,
+when there are six — found nothing in the table and did nothing.
+
+`ok: true`. Nothing happened. The camera stayed exactly where it was.
+
+To a person that is a shrug and a retype. To an agent it is the `clear` bug
+again — in a feature built *specifically for an agent*, by someone who had just
+finished writing the essay above. The fix was to move the table into shared code
+so the server can range-check `n` and **refuse**. It had to be the server,
+because the viewer's state cannot be read back: there is no channel to ask what
+angle it is on. An op whose result cannot be observed afterwards has to be
+validated before.
+
+The lesson is not "we fixed it." It is that **silent success is not a bug you fix
+once.** It is the shape mistakes take whenever a component that has only ever
+answered to a human grows an interface. Every new surface is a fresh opportunity
+to be politely, confidently useless.
 
 ---
 
@@ -239,8 +333,11 @@ And the meaning is not uniform:
 | Command | What `at` refers to |
 |---|---|
 | `box` | the **minimum corner** — it grows toward +x, +y, +z |
+| `fill` | nothing — `from`/`to` are **inclusive** cells, so the extent is \|to−from\|+1 |
 | `sphere` | the **centre** |
+| `ellipsoid` | the **centre**, and `size` is the **full** extent, not a radius |
 | `cylinder` | the **centre**, and its height is centred on that too |
+| `tube` | the **centre**; `h` runs along `axis`, the other two axes take the diameter |
 
 A box at height 10 sits *on* 10. A cylinder at height 10, eight blocks tall,
 spans 6 to 14. Get that wrong and parts land half a structure away — and the
@@ -301,7 +398,8 @@ yet.
 ```bash
 npm install && npm start        # viewer on :5173, world server on :7799
 
-# then, from the skill:
+# then, from the skill — the scripts carry no shebang, so name the interpreter:
+#   .venv/Scripts/python on Windows, .venv/bin/python elsewhere
 doctor.py                       # is everything actually working?
 world.py                        # what can I build with?
 shapes.py bridge --span 40 --mat oak | submit.py
